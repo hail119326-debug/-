@@ -158,7 +158,7 @@ class WSConn extends EventEmitter {
 
 /* ---------- 3) 게임 로직 (한 학급 = 방 하나) ---------- */
 let nextId = 1;
-const game = { phase: 'lobby' }; // lobby | playing | ended
+const game = { phase: 'lobby', activeTeams: [] }; // phase: lobby|playing|ended, activeTeams: 교사가 정한 팀 id 목록
 
 const players = () => [...clients].filter(c => c.meta.role === 'player');
 const hosts = () => [...clients].filter(c => c.meta.role === 'host');
@@ -170,12 +170,18 @@ function handleMessage(ws, raw) {
       ws.meta.role = (m.role === 'host') ? 'host' : 'player';
       ws.meta.id = nextId++;
       ws.meta.name = (m.name || '학생').toString().slice(0, 14);
+      ws.meta.team = (m.team || '').toString().slice(0, 16);   // 팀 id (없으면 미배정)
       ws.meta.score = 0; ws.meta.lines = 0; ws.meta.alive = false; ws.meta.board = null;
       ws.send(JSON.stringify({ type: 'welcome', id: ws.meta.id, phase: game.phase }));
-      // 게임 도중 들어오면 바로 참가
-      if (ws.meta.role === 'player' && game.phase === 'playing') {
-        ws.meta.alive = true;
-        ws.send(JSON.stringify({ type: 'start' }));
+      if (ws.meta.role === 'player') {
+        // 팀을 안 들고 들어왔는데 교사가 팀을 운영 중이면 → 인원이 가장 적은 팀에 자동 배치
+        if (!ws.meta.team && game.activeTeams.length) ws.meta.team = smallestActiveTeam(ws);
+        if (ws.meta.team) notifyTeam(ws);
+        // 게임 도중 들어오면 바로 참가
+        if (game.phase === 'playing') {
+          ws.meta.alive = true;
+          ws.send(JSON.stringify({ type: 'start' }));
+        }
       }
       break;
     case 'state':
@@ -193,6 +199,21 @@ function handleMessage(ws, raw) {
     case 'reset':
       if (ws.meta.role === 'host') resetGame();
       break;
+    case 'autoassign':       // 교사: 팀 자동 배정 (m.teams = 사용할 팀 id 목록)
+      if (ws.meta.role === 'host') autoAssign(Array.isArray(m.teams) ? m.teams : []);
+      break;
+    case 'assign':           // 교사: 특정 학생을 특정 팀으로
+      if (ws.meta.role === 'host') {
+        const p = players().find(x => x.meta.id === (m.id | 0));
+        if (p) { p.meta.team = (m.team || '').toString().slice(0, 16); notifyTeam(p); }
+      }
+      break;
+    case 'clearteams':       // 교사: 팀 해제 → 개인전
+      if (ws.meta.role === 'host') {
+        game.activeTeams = [];
+        for (const p of players()) { p.meta.team = ''; notifyTeam(p); }
+      }
+      break;
   }
 }
 
@@ -208,7 +229,10 @@ function resetGame() {
 }
 function sendGarbage(from, amount) {
   if (game.phase !== 'playing' || amount <= 0) return;
-  const targets = players().filter(p => p !== from && p.meta.alive);
+  // 팀전이면 '다른 팀'에게만, 개인전(팀 없음)이면 아무에게나
+  const targets = from.meta.team
+    ? players().filter(p => p !== from && p.meta.alive && p.meta.team !== from.meta.team)
+    : players().filter(p => p !== from && p.meta.alive);
   if (!targets.length) return;
   const t = targets[(Math.random() * targets.length) | 0];
   t.send(JSON.stringify({ type: 'garbage', amount }));
@@ -218,34 +242,81 @@ function broadcastAll(obj) {
   for (const c of clients) c.send(s);
 }
 
+/* ---------- 팀 배정 (교사 권한) ---------- */
+function notifyTeam(p) {
+  p.send(JSON.stringify({ type: 'team', team: p.meta.team }));
+}
+function smallestActiveTeam(except) {
+  const counts = {};
+  for (const t of game.activeTeams) counts[t] = 0;
+  for (const p of players()) { if (p !== except && counts[p.meta.team] != null) counts[p.meta.team]++; }
+  let best = game.activeTeams[0], bestN = Infinity;
+  for (const t of game.activeTeams) { if (counts[t] < bestN) { bestN = counts[t]; best = t; } }
+  return best;
+}
+function autoAssign(teamIds) {
+  game.activeTeams = teamIds.filter(x => typeof x === 'string' && x).slice(0, 8);
+  const ps = players();
+  for (let i = ps.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0;[ps[i], ps[j]] = [ps[j], ps[i]]; } // 섞기
+  ps.forEach((p, i) => {
+    p.meta.team = game.activeTeams.length ? game.activeTeams[i % game.activeTeams.length] : '';
+    notifyTeam(p);
+  });
+}
+
 /* ---------- 4) 주기적 상태 전송 (300ms마다) ---------- */
+function teamSummary(ps) {
+  const map = new Map();
+  for (const p of ps) {
+    const t = p.meta.team || '';
+    if (!map.has(t)) map.set(t, { team: t, score: 0, lines: 0, alive: 0, players: 0 });
+    const e = map.get(t);
+    e.score += p.meta.score; e.lines += p.meta.lines; e.players++;
+    if (p.meta.alive) e.alive++;
+  }
+  return [...map.values()].sort((a, b) => b.score - a.score);
+}
+
 setInterval(() => {
   const ps = players();
+  const teamMode = ps.some(p => p.meta.team);
   const rank = ps.map(p => ({
-    id: p.meta.id, name: p.meta.name, score: p.meta.score, lines: p.meta.lines, alive: p.meta.alive,
+    id: p.meta.id, name: p.meta.name, team: p.meta.team, score: p.meta.score, lines: p.meta.lines, alive: p.meta.alive,
   })).sort((a, b) => (b.alive - a.alive) || (b.score - a.score));
+  const teams = teamSummary(ps);
 
-  // 학생에게: 순위표만 (가벼움)
-  const lite = JSON.stringify({ type: 'leaderboard', phase: game.phase, players: rank, count: ps.length });
+  // 학생에게: 순위표 + 팀 요약 (가벼움)
+  const lite = JSON.stringify({ type: 'leaderboard', phase: game.phase, players: rank, teams, count: ps.length });
   for (const c of ps) c.send(lite);
 
   // 상황판(교사)에게: 각 학생 보드까지 포함
   const full = JSON.stringify({
-    type: 'hoststate', phase: game.phase, count: ps.length,
+    type: 'hoststate', phase: game.phase, count: ps.length, teams,
     players: ps.map(p => ({
-      id: p.meta.id, name: p.meta.name, score: p.meta.score, lines: p.meta.lines, alive: p.meta.alive, board: p.meta.board,
+      id: p.meta.id, name: p.meta.name, team: p.meta.team, score: p.meta.score, lines: p.meta.lines, alive: p.meta.alive, board: p.meta.board,
     })).sort((a, b) => (b.alive - a.alive) || (b.score - a.score)),
   });
   for (const c of hosts()) c.send(full);
 
-  // 승부 판정: 다 죽었거나 마지막 한 명만 남으면 종료
+  // 승부 판정
   if (game.phase === 'playing' && ps.length > 0) {
     const alive = ps.filter(p => p.meta.alive);
-    const lastStanding = ps.length > 1 && alive.length === 1;
-    const allDead = alive.length === 0;
-    if (lastStanding || allDead) {
+    let ended = false, winnerTeam = null;
+    if (teamMode) {
+      const aliveTeams = new Set(alive.map(p => p.meta.team));
+      const allTeams = new Set(ps.map(p => p.meta.team));
+      if (alive.length === 0) {                                  // 전멸 → 총점 1위 팀 우승
+        ended = true; winnerTeam = teams[0] ? teams[0].team : null;
+      } else if (allTeams.size > 1 && aliveTeams.size === 1) {   // 한 팀만 생존 → 그 팀 우승
+        ended = true; winnerTeam = [...aliveTeams][0];
+      }
+    } else {
+      const lastStanding = ps.length > 1 && alive.length === 1;
+      if (lastStanding || alive.length === 0) ended = true;
+    }
+    if (ended) {
       game.phase = 'ended';
-      broadcastAll({ type: 'gameover', players: rank });
+      broadcastAll({ type: 'gameover', players: rank, teams, teamMode, winnerTeam });
     }
   }
 }, 300);
