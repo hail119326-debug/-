@@ -115,7 +115,7 @@
   .teamCtl select{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:3px 8px;font-size:15px;font-weight:800;margin-left:6px}
   .hbtn.assign{background:linear-gradient(90deg,var(--accent2),var(--accent))}
   .pcard{cursor:pointer}
-  .pcard .pt{font-size:11px;font-weight:800;color:var(--muted)}
+  .pcard .pt{font-size:11px;font-weight:800;padding:2px 10px;border-radius:999px;background:var(--panel2);color:var(--muted)}
 </style>
 </head>
 <body>
@@ -274,6 +274,8 @@ if (IS_HOST) initHost(); else initPlayer();
    ============================================================ */
 function initHost(){
   document.getElementById('hostScreen').classList.remove('hidden');
+  document.getElementById('nameScreen').classList.add('hidden');   // 교사 화면에선 학생 입장창 숨김
+  document.getElementById('playScreen').classList.add('hidden');
   const grid = document.getElementById('grid');
   const lbList = document.getElementById('lbList');
   const cards = new Map(); // id -> {el, canvas}
@@ -311,6 +313,7 @@ function initHost(){
     const a = activeTeamIds(); const i = a.indexOf(cur);
     send({type:'assign', id, team: a[(i+1) % a.length]});  // 다음 팀으로 변경(미배정이면 첫 팀)
   }
+  const teamRank = (t)=>{ const i = activeTeamIds().indexOf(t); return i<0 ? 99 : i; }; // 그리드 묶음 순서
 
   window.onServer = (m)=>{
     if(m.type==='welcome'){ myId=m.id; return; }
@@ -361,7 +364,11 @@ function initHost(){
       return;
     } else { const e=grid.querySelector('.empty'); if(e) e.remove(); }
 
-    m.players.forEach(p=>{
+    // 팀별로 묶어서(팔레트 순) → 팀 안에서는 점수순으로 배치
+    const order = m.players.slice().sort((a,b)=>
+      (teamRank(a.team)-teamRank(b.team)) || (b.alive-a.alive) || (b.score-a.score));
+
+    order.forEach(p=>{
       let c = cards.get(p.id);
       if(!c){
         const el = document.createElement('div'); el.className='pcard'; el.dataset.pid=p.id;
@@ -376,11 +383,18 @@ function initHost(){
       c.el.className = 'pcard' + (p.alive?'':' dead');
       c.el.dataset.team = p.team || '';
       const ti = TEAM_BY_ID[p.team];
-      c.el.style.borderTopColor = ti ? ti.color : '';
-      c.el.style.borderTopWidth = ti ? '4px' : '';
+      if(ti){
+        c.el.style.borderColor = ti.color;                                              // 테두리 전체 팀 색
+        c.el.style.background  = 'color-mix(in srgb,'+ti.color+' 16%, var(--panel))';    // 옅은 팀 색 배경
+        c.el.style.boxShadow   = '0 0 0 2px '+ti.color+', 0 6px 18px color-mix(in srgb,'+ti.color+' 35%, transparent)';
+        c.pt.textContent = ti.name + ' 팀';
+        c.pt.style.background = ti.color; c.pt.style.color = '#0b0e1a';                  // 팀 색으로 채운 칩
+      } else {
+        c.el.style.borderColor=''; c.el.style.background=''; c.el.style.boxShadow='';
+        c.pt.textContent = '미배정';
+        c.pt.style.background=''; c.pt.style.color='';
+      }
       c.pn.textContent = p.name;
-      c.pt.textContent = ti ? (ti.name + ' 팀') : '미배정';
-      c.pt.style.color = ti ? ti.color : 'var(--muted)';
       c.ps.textContent = p.score + '점 · ' + p.lines + '줄';
       renderBoard(c.canvas, p.board);
       grid.appendChild(c.el); // 정렬 순서 반영
@@ -454,6 +468,7 @@ function initPlayer(){
     playScreen.classList.remove('hidden');
     state='waiting';
     setOverlay('대기 중','', '선생님이 팀을 정하고 시작하면 시작돼요');
+    requestAnimationFrame(fit);   // 화면에 보이는 시점에 보드 크기 재계산
     send({type:'join', role:'player', name:myName, team:myTeam});
   }
   document.getElementById('joinBtn').onclick = tryJoin;
@@ -588,6 +603,7 @@ function initPlayer(){
   /* ============== 루프 / 렌더 ============== */
   function beginGame(){
     state='playing'; G=newGame(); spawn(G);
+    fit();   // 시작 시 보드 크기 보정
     document.getElementById('score').textContent=0;
     document.getElementById('lines').textContent=0;
     document.getElementById('level').textContent=1;
@@ -748,16 +764,21 @@ function initPlayer(){
     draw();
   }
 
-  // 보드 캔버스 높이를 화면에 맞춰 살짝 키움(셀 비율 유지)
+  // 보드 캔버스를 화면 크기에 맞춰 조정 (가로·세로 모두 고려)
   function fit(){
-    const wrap=board.parentElement;
-    const maxH=wrap.clientHeight;
-    const cs=Math.floor(maxH/ROWS);
-    board.style.height=(cs*ROWS)+'px';
-    board.style.width=(cs*COLS)+'px';
+    const stage = board.closest('.stage');
+    if(!stage) return;
+    const side = document.querySelector('.side');
+    const sideW = side ? side.offsetWidth : 128;
+    const availH = stage.clientHeight - 4;
+    const availW = stage.clientWidth - sideW - 16;   // 보드~사이드 간격 포함
+    if(availH <= 0 || availW <= 0) return;            // 아직 화면에 안 보이면 패스
+    const cs = Math.max(8, Math.floor(Math.min(availH/ROWS, availW/COLS)));
+    board.style.width  = (cs*COLS) + 'px';
+    board.style.height = (cs*ROWS) + 'px';
   }
-  window.addEventListener('resize',fit);
-  setTimeout(fit,50);
+  window.addEventListener('resize', fit);
+  setTimeout(fit, 50);
 
   connect(()=>{ if(state!=='name'){ send({type:'join', role:'player', name:myName, team:myTeam}); } });
   setTimeout(()=>nameInput.focus(), 100);
