@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>실시간 테트리스 배틀</title>
+<style>
+  :root{
+    --bg:#0b0e1a; --panel:#141a2e; --panel2:#1b2238; --line:#2a3350;
+    --text:#e8ecf7; --muted:#8b95b5; --accent:#6ee7ff; --accent2:#a78bfa; --good:#34d399; --bad:#fb7185;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;
+    background:radial-gradient(1200px 700px at 50% -10%,#1a2140 0%,var(--bg) 60%);
+    color:var(--text);-webkit-tap-highlight-color:transparent;overflow:hidden;
+  }
+  button{font-family:inherit;cursor:pointer}
+  .hidden{display:none !important}
+
+  /* ---------- 학생: 이름 입력 ---------- */
+  #nameScreen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:18px;padding:24px;text-align:center}
+  #nameScreen h1{font-size:clamp(26px,7vw,44px);margin:0;letter-spacing:-1px;
+    background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent}
+  #nameScreen p{color:var(--muted);margin:0 0 6px}
+  #nameInput{font-size:20px;padding:14px 18px;width:min(320px,80vw);border-radius:14px;border:1px solid var(--line);
+    background:var(--panel);color:var(--text);text-align:center;outline:none}
+  #nameInput:focus{border-color:var(--accent)}
+  .btn{font-size:18px;font-weight:700;padding:14px 28px;border-radius:14px;border:none;color:#06121f;
+    background:linear-gradient(90deg,var(--accent),var(--accent2));box-shadow:0 8px 30px rgba(110,231,255,.25)}
+  .btn:active{transform:translateY(1px)}
+
+  /* ---------- 학생: 게임 ---------- */
+  #playScreen{position:fixed;inset:0;display:flex;flex-direction:column;padding:8px;gap:8px}
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:4px 8px}
+  .topbar .me{font-weight:800;font-size:16px}
+  .topbar .rank{color:var(--accent);font-weight:800}
+  .stage{flex:1;display:flex;gap:10px;min-height:0;justify-content:center}
+  .boardWrap{position:relative;display:flex;align-items:center}
+  #board{background:#070a14;border:1px solid var(--line);border-radius:10px;height:100%;max-height:100%;touch-action:none}
+  .side{display:flex;flex-direction:column;gap:10px;width:128px;min-width:96px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px}
+  .card h3{margin:0 0 6px;font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase}
+  #next{display:block;width:100%;background:#070a14;border-radius:8px}
+  .stat{display:flex;justify-content:space-between;font-size:14px;margin:3px 0}
+  .stat b{font-variant-numeric:tabular-nums}
+  #miniRank{font-size:12px;line-height:1.7;max-height:160px;overflow:hidden}
+  #miniRank .row{display:flex;justify-content:space-between;gap:6px}
+  #miniRank .row.you{color:var(--accent);font-weight:800}
+  #miniRank .dead{color:var(--muted);text-decoration:line-through}
+
+  /* 터치 컨트롤 */
+  #pad{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;padding:4px}
+  #pad button{height:58px;border-radius:14px;border:1px solid var(--line);background:var(--panel2);color:var(--text);
+    font-size:22px;font-weight:800;display:flex;align-items:center;justify-content:center}
+  #pad button:active{background:#283356}
+  @media(hover:hover) and (pointer:fine){ #pad{opacity:.55} }
+
+  /* 오버레이 (대기/게임오버/카운트다운) */
+  .overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+    background:rgba(7,10,20,.82);backdrop-filter:blur(3px);border-radius:10px;text-align:center;padding:20px;z-index:5}
+  .overlay h2{margin:0;font-size:clamp(24px,6vw,40px)}
+  .overlay .big{font-size:clamp(60px,18vw,120px);font-weight:900;line-height:1;
+    background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .overlay .sub{color:var(--muted)}
+
+  /* ---------- 상황판(교사) ---------- */
+  #hostScreen{position:fixed;inset:0;display:flex;flex-direction:column;padding:16px;gap:14px}
+  .hostHead{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  .hostHead h1{margin:0;font-size:24px;letter-spacing:-.5px;
+    background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .pill{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:8px 14px;font-size:14px;color:var(--muted)}
+  .pill b{color:var(--text)}
+  .joinUrls{display:flex;gap:8px;flex-wrap:wrap}
+  .joinUrls .u{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 14px;font-size:18px;font-weight:800;color:var(--accent)}
+  .spacer{flex:1}
+  .hbtn{font-size:16px;font-weight:800;padding:12px 22px;border-radius:12px;border:none;color:#06121f}
+  .hbtn.start{background:linear-gradient(90deg,var(--good),#22d3ee)}
+  .hbtn.reset{background:var(--panel2);color:var(--text);border:1px solid var(--line)}
+  .hostBody{flex:1;display:flex;gap:16px;min-height:0}
+  #leaderboard{width:300px;min-width:240px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;overflow:auto}
+  #leaderboard h2{margin:0 0 10px;font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+  .lrow{display:flex;align-items:center;gap:10px;padding:8px 6px;border-radius:10px}
+  .lrow:nth-child(2){background:linear-gradient(90deg,rgba(250,204,21,.18),transparent)}
+  .lrow .pos{width:26px;text-align:center;font-weight:900;color:var(--muted)}
+  .lrow .nm{flex:1;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .lrow .sc{font-weight:900;font-variant-numeric:tabular-nums}
+  .lrow.dead{opacity:.45}
+  #grid{flex:1;overflow:auto;display:grid;gap:12px;align-content:start;
+    grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
+  .pcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:8px;display:flex;flex-direction:column;gap:6px;align-items:center}
+  .pcard.dead{opacity:.4;filter:grayscale(.6)}
+  .pcard canvas{background:#070a14;border-radius:8px;width:100%}
+  .pcard .pn{font-weight:800;font-size:13px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pcard .ps{font-size:12px;color:var(--accent);font-weight:800;font-variant-numeric:tabular-nums}
+  #hostOverlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;
+    background:rgba(7,10,20,.9);backdrop-filter:blur(4px);z-index:20;text-align:center}
+  #hostOverlay .crown{font-size:64px}
+  #hostOverlay .win{font-size:clamp(40px,8vw,80px);font-weight:900;
+    background:linear-gradient(90deg,#fbbf24,#f472b6);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .empty{color:var(--muted);text-align:center;margin-top:40px;grid-column:1/-1}
+</style>
+</head>
+<body>
+
+<!-- ================= 학생: 이름 입력 ================= -->
+<div id="nameScreen">
+  <h1>실시간 테트리스 배틀</h1>
+  <p>이름을 입력하고 입장하세요</p>
+  <input id="nameInput" maxlength="14" placeholder="내 이름" autocomplete="off" />
+  <button class="btn" id="joinBtn">입장하기</button>
+  <p id="nameErr" style="color:var(--bad);min-height:18px"></p>
+</div>
+
+<!-- ================= 학생: 게임 ================= -->
+<div id="playScreen" class="hidden">
+  <div class="topbar">
+    <span class="me" id="meName">-</span>
+    <span class="rank" id="meRank"></span>
+  </div>
+  <div class="stage">
+    <div class="boardWrap">
+      <canvas id="board" width="200" height="400"></canvas>
+      <div class="overlay" id="playOverlay">
+        <h2 id="ovTitle">대기 중</h2>
+        <div class="big hidden" id="ovBig"></div>
+        <div class="sub" id="ovSub">선생님이 시작하면 자동으로 시작돼요</div>
+      </div>
+    </div>
+    <div class="side">
+      <div class="card">
+        <h3>다음</h3>
+        <canvas id="next" width="96" height="72"></canvas>
+      </div>
+      <div class="card">
+        <div class="stat"><span>점수</span><b id="score">0</b></div>
+        <div class="stat"><span>줄</span><b id="lines">0</b></div>
+        <div class="stat"><span>레벨</span><b id="level">1</b></div>
+      </div>
+      <div class="card" style="flex:1">
+        <h3>실시간 순위</h3>
+        <div id="miniRank"></div>
+      </div>
+    </div>
+  </div>
+  <div id="pad">
+    <button data-k="left">◀</button>
+    <button data-k="rotate">⟳</button>
+    <button data-k="right">▶</button>
+    <button data-k="down">▼</button>
+    <button data-k="drop">⤓</button>
+  </div>
+</div>
+
+<!-- ================= 상황판(교사) ================= -->
+<div id="hostScreen" class="hidden">
+  <div class="hostHead">
+    <h1>🎮 테트리스 배틀 상황판</h1>
+    <span class="pill">접속 <b id="hCount">0</b>명</span>
+    <span class="pill">상태 <b id="hPhase">대기</b></span>
+    <div class="spacer"></div>
+    <button class="hbtn start" id="hStart">▶ 시작</button>
+    <button class="hbtn reset" id="hReset">🔄 리셋</button>
+  </div>
+  <div class="joinUrls" id="joinUrls"><span class="pill">학생 접속 주소 불러오는 중…</span></div>
+  <div class="hostBody">
+    <div id="leaderboard"><h2>순위</h2><div id="lbList"></div></div>
+    <div id="grid"><div class="empty">학생들이 접속하면 여기에 보드가 나타납니다.</div></div>
+  </div>
+</div>
+<div id="hostOverlay" class="hidden">
+  <div class="crown">👑</div>
+  <div class="win" id="winName">우승!</div>
+  <div class="pill" id="winSub"></div>
+  <button class="hbtn reset" style="margin-top:10px" onclick="document.getElementById('hostOverlay').classList.add('hidden')">닫기</button>
+</div>
+
+<script>
+/* ============================================================
+   공통: WebSocket 연결
+   ============================================================ */
+const IS_HOST = new URLSearchParams(location.search).has('host');
+const WS_URL = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host;
+let ws, myId = null;
+
+function connect(onOpen){
+  ws = new WebSocket(WS_URL);
+  ws.onopen = onOpen;
+  ws.onmessage = (e)=>{ let m; try{m=JSON.parse(e.data)}catch{return} onServer(m); };
+  ws.onclose = ()=>{ setTimeout(()=>connect(onOpen), 1000); }; // 끊기면 재접속
+}
+function send(obj){ if(ws && ws.readyState===1) ws.send(JSON.stringify(obj)); }
+
+/* ============================================================
+   테트리스 색상/모양 (학생 모드 + 상황판 렌더 공용)
+   int: 0빈칸 1=I 2=J 3=L 4=O 5=S 6=T 7=Z 8=쓰레기
+   ============================================================ */
+const COLOR = ['', '#22d3ee','#3b82f6','#f59e0b','#eab308','#22c55e','#a855f7','#ef4444','#5b6472'];
+const TI = { I:1, J:2, L:3, O:4, S:5, T:6, Z:7, G:8 };
+const COLS = 10, ROWS = 20;
+
+function drawCell(ctx, x, y, cell, cs){
+  if(!cell) return;
+  ctx.fillStyle = COLOR[cell];
+  ctx.fillRect(x*cs, y*cs, cs, cs);
+  ctx.fillStyle = 'rgba(255,255,255,.18)';
+  ctx.fillRect(x*cs, y*cs, cs, cs*0.18);              // 윗면 하이라이트
+  ctx.strokeStyle = 'rgba(0,0,0,.35)';
+  ctx.strokeRect(x*cs+.5, y*cs+.5, cs-1, cs-1);
+}
+// 20x10 정수 배열을 캔버스에 그리기 (상황판/미리보기 공용)
+function renderBoard(canvas, grid){
+  const ctx = canvas.getContext('2d');
+  const cs = canvas.width / COLS;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle = '#070a14'; ctx.fillRect(0,0,canvas.width,canvas.height);
+  if(!grid) return;
+  for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++) drawCell(ctx,x,y,grid[y][x],cs);
+}
+
+/* ============================================================
+   여기부터 모드 분기
+   ============================================================ */
+if (IS_HOST) initHost(); else initPlayer();
+
+/* ============================================================
+   상황판(교사) 모드
+   ============================================================ */
+function initHost(){
+  document.getElementById('hostScreen').classList.remove('hidden');
+  const grid = document.getElementById('grid');
+  const lbList = document.getElementById('lbList');
+  const cards = new Map(); // id -> {el, canvas}
+
+  // 학생 접속 주소 표시
+  //  - 클라우드 배포(공개 주소)면: 현재 공개 주소 하나만 안내
+  //  - 로컬(교사 PC) 실행이면: 같은 와이파이용 LAN IP 안내
+  fetch('/info').then(r=>r.json()).then(info=>{
+    const box = document.getElementById('joinUrls');
+    const host = location.hostname;
+    const isLocal = host==='localhost' || host==='127.0.0.1' || host==='' ||
+      /^10\./.test(host) || /^192\.168\./.test(host) || /^172\.(1[6-9]|2\d|3[01])\./.test(host);
+    let list;
+    if(isLocal){
+      list = (info.ips||[]).map(ip=>'http://'+ip+':'+info.port);   // 같은 와이파이 접속 주소
+    } else {
+      list = [location.origin];                                    // 배포된 공개 주소
+    }
+    box.innerHTML = '<span class="pill">학생 접속 →</span>' +
+      (list.length ? list.map(u=>'<span class="u">'+u+'</span>').join('') :
+        '<span class="pill">주소를 못 찾았어요</span>');
+  }).catch(()=>{});
+
+  document.getElementById('hStart').onclick = ()=>{ send({type:'start'}); document.getElementById('hostOverlay').classList.add('hidden'); };
+  document.getElementById('hReset').onclick = ()=>{ send({type:'reset'}); document.getElementById('hostOverlay').classList.add('hidden'); };
+
+  window.onServer = (m)=>{
+    if(m.type==='welcome'){ myId=m.id; return; }
+    if(m.type==='hoststate'){ renderHost(m); return; }
+    if(m.type==='gameover'){ showWinner(m.players); return; }
+  };
+
+  function renderHost(m){
+    document.getElementById('hCount').textContent = m.count;
+    document.getElementById('hPhase').textContent =
+      m.phase==='playing' ? '진행 중' : (m.phase==='ended' ? '종료' : '대기');
+
+    // 순위표
+    lbList.innerHTML = m.players.map((p,i)=>`
+      <div class="lrow ${p.alive?'':'dead'}">
+        <div class="pos">${i+1}</div>
+        <div class="nm">${esc(p.name)}</div>
+        <div class="sc">${p.score}</div>
+      </div>`).join('') || '<div class="empty" style="margin-top:10px">대기 중…</div>';
+
+    // 보드 그리드 (없는 학생 카드 제거)
+    const ids = new Set(m.players.map(p=>p.id));
+    for(const [id,c] of cards){ if(!ids.has(id)){ c.el.remove(); cards.delete(id); } }
+    if(m.players.length===0){
+      if(!grid.querySelector('.empty')) grid.innerHTML='<div class="empty">학생들이 접속하면 여기에 보드가 나타납니다.</div>';
+      return;
+    } else { const e=grid.querySelector('.empty'); if(e) e.remove(); }
+
+    m.players.forEach(p=>{
+      let c = cards.get(p.id);
+      if(!c){
+        const el = document.createElement('div'); el.className='pcard';
+        const cv = document.createElement('canvas'); cv.width=100; cv.height=200;
+        const pn = document.createElement('div'); pn.className='pn';
+        const ps = document.createElement('div'); ps.className='ps';
+        el.append(cv,pn,ps); grid.appendChild(el);
+        c = {el, canvas:cv, pn, ps}; cards.set(p.id, c);
+      }
+      c.el.className = 'pcard' + (p.alive?'':' dead');
+      c.pn.textContent = p.name;
+      c.ps.textContent = p.score + '점 · ' + p.lines + '줄';
+      renderBoard(c.canvas, p.board);
+      grid.appendChild(c.el); // 정렬 순서 반영
+    });
+  }
+
+  function showWinner(rank){
+    const w = rank && rank[0];
+    document.getElementById('winName').textContent = w ? (w.name + ' 우승!') : '게임 종료';
+    document.getElementById('winSub').textContent = w ? (w.score + '점 · ' + w.lines + '줄') : '';
+    document.getElementById('hostOverlay').classList.remove('hidden');
+  }
+
+  connect(()=> send({type:'join', role:'host', name:'HOST'}));
+}
+
+/* ============================================================
+   학생 모드
+   ============================================================ */
+function initPlayer(){
+  const nameScreen = document.getElementById('nameScreen');
+  const playScreen = document.getElementById('playScreen');
+  const nameInput = document.getElementById('nameInput');
+  const board = document.getElementById('board');
+  const bctx = board.getContext('2d');
+  const nextCv = document.getElementById('next');
+  const nctx = nextCv.getContext('2d');
+
+  let myName = '';
+  let state = 'name'; // name | waiting | playing | dead
+  let G = null;       // 게임 상태
+  let raf=0, lastT=0, acc=0, sendAcc=0;
+  const pressed = new Set();
+
+  // 캔버스 셀 크기
+  const CS = board.width / COLS;
+
+  /* ---- 입장 ---- */
+  function tryJoin(){
+    const n = nameInput.value.trim();
+    if(!n){ document.getElementById('nameErr').textContent='이름을 입력하세요'; return; }
+    myName = n;
+    document.getElementById('meName').textContent = myName;
+    nameScreen.classList.add('hidden');
+    playScreen.classList.remove('hidden');
+    state='waiting';
+    setOverlay('대기 중','', '선생님이 시작하면 자동으로 시작돼요');
+    send({type:'join', role:'player', name:myName});
+  }
+  document.getElementById('joinBtn').onclick = tryJoin;
+  nameInput.addEventListener('keydown', e=>{ if(e.key==='Enter') tryJoin(); });
+
+  /* ---- 서버 메시지 ---- */
+  window.onServer = (m)=>{
+    if(m.type==='welcome'){ myId=m.id; if(m.phase==='playing'){ startCountdown(); } return; }
+    if(m.type==='start'){ startCountdown(); return; }
+    if(m.type==='reset'){ toWaiting(); return; }
+    if(m.type==='garbage'){ if(G && state==='playing') addGarbage(m.amount); return; }
+    if(m.type==='gameover'){ onGameOver(m.players); return; }
+    if(m.type==='leaderboard'){ renderMiniRank(m.players); return; }
+  };
+
+  function toWaiting(){
+    state='waiting'; cancelAnimationFrame(raf); G=null;
+    clearBoard();
+    setOverlay('대기 중','', '선생님이 시작하면 자동으로 시작돼요');
+  }
+
+  /* ---- 카운트다운 후 시작 ---- */
+  function startCountdown(){
+    if(state==='playing') return;
+    let n=3;
+    setOverlay('', String(n), '');
+    const iv = setInterval(()=>{
+      n--;
+      if(n>0) setOverlay('', String(n), '');
+      else if(n===0) setOverlay('', 'GO!', '');
+      else { clearInterval(iv); hideOverlay(); beginGame(); }
+    }, 700);
+  }
+
+  /* ============== 테트리스 엔진 ============== */
+  const SHAPES = {
+    I:[[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]],
+    J:[[1,0,0],[1,1,1],[0,0,0]],
+    L:[[0,0,1],[1,1,1],[0,0,0]],
+    O:[[1,1],[1,1]],
+    S:[[0,1,1],[1,1,0],[0,0,0]],
+    T:[[0,1,0],[1,1,1],[0,0,0]],
+    Z:[[1,1,0],[0,1,1],[0,0,0]],
+  };
+  const TYPES=['I','J','L','O','S','T','Z'];
+
+  function newGame(){
+    return {
+      grid: Array.from({length:ROWS},()=>Array(COLS).fill(0)),
+      cur:null, next:null, bag:[], score:0, lines:0, level:1, down:false, over:false,
+    };
+  }
+  function bagNext(g){
+    if(g.bag.length===0){ g.bag = TYPES.slice(); for(let i=g.bag.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[g.bag[i],g.bag[j]]=[g.bag[j],g.bag[i]];} }
+    return g.bag.pop();
+  }
+  function spawn(g){
+    const type = g.next || bagNext(g);
+    g.next = bagNext(g);
+    const mat = SHAPES[type].map(r=>r.slice());
+    const piece = { type, mat, r:0, c:((COLS - mat[0].length)>>1) };
+    if(collide(g, piece)){ g.over=true; return; }
+    g.cur = piece;
+  }
+  function collide(g, p){
+    for(let y=0;y<p.mat.length;y++) for(let x=0;x<p.mat[y].length;x++){
+      if(!p.mat[y][x]) continue;
+      const gx=p.c+x, gy=p.r+y;
+      if(gx<0||gx>=COLS||gy>=ROWS) return true;
+      if(gy>=0 && g.grid[gy][gx]) return true;
+    }
+    return false;
+  }
+  function rotateCW(mat){
+    const n=mat.length, m=mat[0].length;
+    const out=Array.from({length:m},()=>Array(n).fill(0));
+    for(let y=0;y<n;y++) for(let x=0;x<m;x++) out[x][n-1-y]=mat[y][x];
+    return out;
+  }
+  function tryRotate(g){
+    const p=g.cur, old=p.mat;
+    p.mat = rotateCW(p.mat);
+    for(const dx of [0,-1,1,-2,2]){ p.c+=dx; if(!collide(g,p)) return; p.c-=dx; }
+    p.mat = old; // 실패 시 원복
+  }
+  function lock(g){
+    const p=g.cur, t=TI[p.type];
+    for(let y=0;y<p.mat.length;y++) for(let x=0;x<p.mat[y].length;x++){
+      if(p.mat[y][x]){ const gy=p.r+y, gx=p.c+x; if(gy>=0) g.grid[gy][gx]=t; }
+    }
+    clearLines(g);
+    spawn(g);
+  }
+  function clearLines(g){
+    let cleared=0;
+    for(let y=ROWS-1;y>=0;y--){
+      if(g.grid[y].every(v=>v!==0)){ g.grid.splice(y,1); g.grid.unshift(Array(COLS).fill(0)); cleared++; y++; }
+    }
+    if(cleared>0){
+      const pts=[0,100,300,500,800][cleared]*g.level;
+      g.score+=pts; g.lines+=cleared;
+      g.level=Math.floor(g.lines/10)+1;
+      const atk=[0,0,1,2,4][cleared];          // 보낼 방해 줄 수
+      if(atk>0) send({type:'attack', amount:atk});
+    }
+  }
+  function addGarbage(n){
+    const g=G;
+    // 위쪽 n줄에 블록이 있으면 밀려서 탈락
+    for(let y=0;y<n;y++) if(g.grid[y].some(v=>v!==0)){ g.over=true; }
+    for(let i=0;i<n;i++){
+      g.grid.shift();
+      const row=Array(COLS).fill(8);
+      row[(Math.random()*COLS)|0]=0;          // 구멍 하나
+      g.grid.push(row);
+    }
+    if(g.cur){ while(collide(g,g.cur)){ g.cur.r--; if(g.cur.r<-3){ g.over=true; break; } } }
+    if(g.over) endGame();
+  }
+  function hardDrop(g){
+    let d=0; while(!collide(g,{...g.cur,r:g.cur.r+1})){ g.cur.r++; d++; }
+    g.score+=d*2; lock(g);
+  }
+  function softStep(g){
+    if(!collide(g,{...g.cur,r:g.cur.r+1})){ g.cur.r++; if(g.down) g.score+=1; }
+    else lock(g);
+  }
+  function move(g,dx){ g.cur.c+=dx; if(collide(g,g.cur)) g.cur.c-=dx; }
+
+  /* ============== 루프 / 렌더 ============== */
+  function beginGame(){
+    state='playing'; G=newGame(); spawn(G);
+    document.getElementById('score').textContent=0;
+    document.getElementById('lines').textContent=0;
+    document.getElementById('level').textContent=1;
+    lastT=performance.now(); acc=0; sendAcc=0;
+    cancelAnimationFrame(raf); raf=requestAnimationFrame(loop);
+  }
+  function dropInterval(g){ return Math.max(80, 800 - (g.level-1)*65); }
+
+  function loop(t){
+    if(state!=='playing'){ return; }
+    const g=G; const dt=t-lastT; lastT=t; acc+=dt; sendAcc+=dt;
+    const iv = g.down ? 45 : dropInterval(g);
+    while(acc>=iv){ softStep(g); acc-=iv; if(g.over) break; }
+    if(g.over){ endGame(); return; }
+    draw();
+    // 점수/보드 전송 (200ms마다)
+    if(sendAcc>=200){ sendAcc=0; sendState(); updateStats(); }
+    raf=requestAnimationFrame(loop);
+  }
+
+  function snapshot(){
+    const g=G; const out=g.grid.map(r=>r.slice());
+    if(g.cur){ const p=g.cur,t=TI[p.type];
+      for(let y=0;y<p.mat.length;y++) for(let x=0;x<p.mat[y].length;x++)
+        if(p.mat[y][x]){ const gy=p.r+y,gx=p.c+x; if(gy>=0&&gy<ROWS&&gx>=0&&gx<COLS) out[gy][gx]=t; }
+    }
+    return out;
+  }
+  function sendState(){ send({type:'state', score:G.score, lines:G.lines, board:snapshot()}); }
+  function updateStats(){
+    document.getElementById('score').textContent=G.score;
+    document.getElementById('lines').textContent=G.lines;
+    document.getElementById('level').textContent=G.level;
+  }
+
+  function draw(){
+    const g=G;
+    bctx.clearRect(0,0,board.width,board.height);
+    bctx.fillStyle='#070a14'; bctx.fillRect(0,0,board.width,board.height);
+    // 격자
+    bctx.strokeStyle='rgba(255,255,255,.04)';
+    for(let x=1;x<COLS;x++){ bctx.beginPath();bctx.moveTo(x*CS,0);bctx.lineTo(x*CS,board.height);bctx.stroke(); }
+    for(let y=1;y<ROWS;y++){ bctx.beginPath();bctx.moveTo(0,y*CS);bctx.lineTo(board.width,y*CS);bctx.stroke(); }
+    // 쌓인 블록
+    for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++) drawCell(bctx,x,y,g.grid[y][x],CS);
+    // 고스트 + 현재 조각
+    if(g.cur){
+      const ghost={...g.cur,r:g.cur.r}; while(!collide(g,{...ghost,r:ghost.r+1})) ghost.r++;
+      bctx.globalAlpha=.22;
+      for(let y=0;y<g.cur.mat.length;y++) for(let x=0;x<g.cur.mat[y].length;x++)
+        if(g.cur.mat[y][x]) drawCell(bctx,ghost.c+x,ghost.r+y,TI[g.cur.type],CS);
+      bctx.globalAlpha=1;
+      for(let y=0;y<g.cur.mat.length;y++) for(let x=0;x<g.cur.mat[y].length;x++)
+        if(g.cur.mat[y][x]) drawCell(bctx,g.cur.c+x,g.cur.r+y,TI[g.cur.type],CS);
+    }
+    drawNext();
+  }
+  function drawNext(){
+    nctx.clearRect(0,0,nextCv.width,nextCv.height);
+    if(!G.next) return;
+    const mat=SHAPES[G.next], t=TI[G.next], cs=16;
+    const w=mat[0].length*cs, h=mat.length*cs;
+    const ox=(nextCv.width-w)/2, oy=(nextCv.height-h)/2;
+    for(let y=0;y<mat.length;y++) for(let x=0;x<mat[y].length;x++) if(mat[y][x]){
+      nctx.fillStyle=COLOR[t]; nctx.fillRect(ox+x*cs,oy+y*cs,cs,cs);
+      nctx.strokeStyle='rgba(0,0,0,.35)'; nctx.strokeRect(ox+x*cs+.5,oy+y*cs+.5,cs-1,cs-1);
+    }
+  }
+  function clearBoard(){ bctx.fillStyle='#070a14'; bctx.fillRect(0,0,board.width,board.height); nctx.clearRect(0,0,nextCv.width,nextCv.height); }
+
+  function endGame(){
+    if(state!=='playing') return;
+    state='dead'; cancelAnimationFrame(raf);
+    sendState(); send({type:'topout', score:G.score, lines:G.lines});
+    updateStats();
+    setOverlay('게임 오버','', '결과를 기다리는 중…');
+  }
+  function onGameOver(rank){
+    // 최종 결과
+    const me = rank.find(p=>p.id===myId);
+    const pos = me ? (rank.indexOf(me)+1) : '-';
+    const win = rank[0];
+    const mine = (me && win && me.id===win.id);
+    cancelAnimationFrame(raf); if(state==='playing') state='dead';
+    setOverlay(mine?'🏆 우승!':'게임 종료',
+      '', (win?('1위: '+win.name+' ('+win.score+'점)'):'') + (me?(' · 내 순위 '+pos+'위'):''));
+  }
+
+  /* ---- 미니 순위표 (학생 화면 우측) ---- */
+  function renderMiniRank(list){
+    const box=document.getElementById('miniRank');
+    const meIdx=list.findIndex(p=>p.id===myId);
+    document.getElementById('meRank').textContent = meIdx>=0 ? ((meIdx+1)+' / '+list.length+'위') : '';
+    const top=list.slice(0,5);
+    let html=top.map((p,i)=>rowHtml(i+1,p)).join('');
+    if(meIdx>=5) html+='<div style="color:var(--muted)">…</div>'+rowHtml(meIdx+1,list[meIdx]);
+    box.innerHTML=html;
+  }
+  function rowHtml(pos,p){
+    const you=p.id===myId?' you':''; const dead=p.alive?'':' dead';
+    return `<div class="row${you}"><span class="${dead}">${pos}. ${esc(p.name)}</span><b>${p.score}</b></div>`;
+  }
+
+  /* ---- 오버레이 ---- */
+  function setOverlay(title,big,sub){
+    const o=document.getElementById('playOverlay'); o.style.display='flex';
+    const tEl=document.getElementById('ovTitle'), bEl=document.getElementById('ovBig'), sEl=document.getElementById('ovSub');
+    tEl.textContent=title; tEl.classList.toggle('hidden',!title);
+    bEl.textContent=big; bEl.classList.toggle('hidden',!big);
+    sEl.textContent=sub;
+  }
+  function hideOverlay(){ document.getElementById('playOverlay').style.display='none'; }
+
+  /* ---- 입력: 키보드 ---- */
+  const KEY={ArrowLeft:'left',ArrowRight:'right',ArrowDown:'down',ArrowUp:'rotate',' ':'drop'};
+  window.addEventListener('keydown', e=>{
+    const k=KEY[e.key]; if(!k) return; e.preventDefault();
+    if(state!=='playing'||!G) return;
+    if(k==='down'){ G.down=true; }
+    if(pressed.has(k) && (k==='rotate'||k==='drop')) return; // 회전/하드드롭은 연타 방지
+    pressed.add(k);
+    act(k);
+  });
+  window.addEventListener('keyup', e=>{
+    const k=KEY[e.key]; if(!k) return; pressed.delete(k);
+    if(k==='down'&&G) G.down=false;
+  });
+
+  /* ---- 입력: 터치 버튼 ---- */
+  document.querySelectorAll('#pad button').forEach(btn=>{
+    const k=btn.dataset.k;
+    const on=(e)=>{ e.preventDefault(); if(state!=='playing'||!G) return;
+      if(k==='down') G.down=true; act(k);
+      if(k==='left'||k==='right'){ btn._rep=setInterval(()=>{ if(state==='playing'&&G) act(k); },110); }
+    };
+    const off=(e)=>{ e.preventDefault(); if(k==='down'&&G) G.down=false; clearInterval(btn._rep); };
+    btn.addEventListener('touchstart',on,{passive:false});
+    btn.addEventListener('touchend',off,{passive:false});
+    btn.addEventListener('mousedown',on); btn.addEventListener('mouseup',off); btn.addEventListener('mouseleave',off);
+  });
+
+  function act(k){
+    const g=G; if(!g||g.over) return;
+    if(k==='left') move(g,-1);
+    else if(k==='right') move(g,1);
+    else if(k==='rotate') tryRotate(g);
+    else if(k==='down') softStep(g);
+    else if(k==='drop') hardDrop(g);
+    if(g.over){ draw(); endGame(); return; }
+    draw();
+  }
+
+  // 보드 캔버스 높이를 화면에 맞춰 살짝 키움(셀 비율 유지)
+  function fit(){
+    const wrap=board.parentElement;
+    const maxH=wrap.clientHeight;
+    const cs=Math.floor(maxH/ROWS);
+    board.style.height=(cs*ROWS)+'px';
+    board.style.width=(cs*COLS)+'px';
+  }
+  window.addEventListener('resize',fit);
+  setTimeout(fit,50);
+
+  connect(()=>{ if(state!=='name'){ send({type:'join', role:'player', name:myName}); } });
+  setTimeout(()=>nameInput.focus(), 100);
+}
+
+function esc(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+</script>
+</body>
+</html>
