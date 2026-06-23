@@ -37,21 +37,22 @@
   .topbar .me{font-weight:800;font-size:16px}
   .topbar .rank{color:var(--accent);font-weight:800}
   .stage{flex:1;display:flex;gap:10px;min-height:0}
-  .mainCol{display:flex;gap:10px;min-height:0;flex:0 0 auto;justify-content:center}
+  .mainCol{display:flex;gap:10px;min-height:0;flex:0 0 auto;justify-content:center;order:2}   /* 내 보드: 오른쪽 */
   .boardWrap{position:relative;display:flex;align-items:center}
   #board{background:#070a14;border:1px solid var(--line);border-radius:10px;height:100%;max-height:100%;touch-action:none}
   .side{display:flex;flex-direction:column;gap:10px;width:120px;min-width:96px}
-  .oppWrap{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;
+  .oppWrap{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;order:1;             /* 상대 화면: 왼쪽 */
     background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px}
   .oppTitle{margin:0 0 6px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
-  #oppGrid{flex:1;overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:6px;align-content:start}
+  #oppGrid{flex:1;overflow:auto;display:grid;gap:6px;align-content:start;justify-content:center}   /* 칸 크기는 JS가 인원수에 맞춰 계산 */
   .opp{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0}
-  .opp canvas{width:100%;display:block;background:#070a14;border-radius:4px;border:2px solid var(--line)}
+  .opp canvas{width:100%;display:block;height:calc(var(--bw,50px) * 2);background:#070a14;border-radius:4px;border:2px solid var(--line)}
   .opp .on{font-size:9px;font-weight:700;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .opp.dead{opacity:.4}
   @media (max-width:720px){
     .stage{flex-direction:column}
-    .oppWrap{flex:1 1 auto;max-height:38vh}
+    .mainCol{order:1}     /* 모바일에선 내 보드를 위로 */
+    .oppWrap{order:2;flex:1 1 auto;max-height:38vh}
     .side{width:104px;min-width:84px}
   }
   .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px}
@@ -83,7 +84,14 @@
   .pill{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:8px 14px;font-size:14px;color:var(--muted)}
   .pill b{color:var(--text)}
   .joinUrls{display:flex;gap:8px;flex-wrap:wrap}
-  .joinUrls .u{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 14px;font-size:18px;font-weight:800;color:var(--accent)}
+  .joinUrls .u{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 14px;font-size:18px;font-weight:800;color:var(--accent);cursor:pointer;font-family:inherit}
+  .joinUrls .u:hover{border-color:var(--accent)}
+  #qrOverlay{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;background:rgba(7,10,20,.94);backdrop-filter:blur(4px)}
+  .qrCard{display:flex;flex-direction:column;align-items:center;gap:14px;padding:24px;text-align:center}
+  .qrBox{background:#fff;padding:18px;border-radius:18px;display:flex;align-items:center;justify-content:center;min-width:220px;min-height:220px}
+  .qrBox img{display:block;width:min(62vmin,520px);height:auto;image-rendering:pixelated}
+  .qrUrl{font-size:22px;font-weight:800;color:var(--accent);word-break:break-all;max-width:90vw}
+  .qrHint{color:var(--muted)}
   .spacer{flex:1}
   .hbtn{font-size:16px;font-weight:800;padding:12px 22px;border-radius:12px;border:none;color:#06121f}
   .hbtn.start{background:linear-gradient(90deg,var(--good),#22d3ee)}
@@ -210,11 +218,13 @@
     <div id="grid"><div class="empty">학생들이 접속하면 여기에 보드가 나타납니다.</div></div>
   </div>
 </div>
-<div id="hostOverlay" class="hidden">
-  <div class="crown">👑</div>
-  <div class="win" id="winName">우승!</div>
-  <div class="pill" id="winSub"></div>
-  <button class="hbtn reset" style="margin-top:10px" onclick="document.getElementById('hostOverlay').classList.add('hidden')">닫기</button>
+<div id="qrOverlay" class="hidden" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="qrCard">
+    <div id="qrBox" class="qrBox"></div>
+    <div id="qrUrl" class="qrUrl"></div>
+    <div class="qrHint">학생들이 휴대폰 카메라로 스캔하면 바로 입장해요</div>
+    <button class="hbtn reset" onclick="document.getElementById('qrOverlay').classList.add('hidden')">닫기</button>
+  </div>
 </div>
 
 <script>
@@ -312,9 +322,43 @@ function initHost(){
       list = [location.origin];                                    // 배포된 공개 주소
     }
     box.innerHTML = '<span class="pill">학생 접속 →</span>' +
-      (list.length ? list.map(u=>'<span class="u">'+u+'</span>').join('') :
+      (list.length ? list.map(u=>'<button class="u" data-url="'+esc(u)+'">📱 '+esc(u)+'</button>').join('') :
         '<span class="pill">주소를 못 찾았어요</span>');
+    box.querySelectorAll('.u').forEach(b=> b.onclick = ()=> showQR(b.dataset.url));
   }).catch(()=>{});
+
+  /* ---- QR 코드 (학생 접속 주소를 스캔으로) ---- */
+  // QR 생성 라이브러리는 CDN에서 불러옵니다(배포 환경은 인터넷 연결됨). 막히면 주소 글자로 안내.
+  const QR_SRCS = [
+    'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js',
+  ];
+  function loadQrLib(cb){
+    if(window.qrcode) return cb(true);
+    let i=0;
+    (function next(){
+      if(i>=QR_SRCS.length) return cb(false);
+      const s=document.createElement('script'); s.src=QR_SRCS[i++];
+      s.onload=()=> window.qrcode ? cb(true) : next();
+      s.onerror=next;
+      document.head.appendChild(s);
+    })();
+  }
+  function showQR(url){
+    const ov=document.getElementById('qrOverlay'), box=document.getElementById('qrBox');
+    document.getElementById('qrUrl').textContent = url;
+    ov.classList.remove('hidden');
+    box.innerHTML = '<div style="color:#555">QR 만드는 중…</div>';
+    loadQrLib((ok)=>{
+      if(!ok || !window.qrcode){ box.innerHTML = '<div style="color:#555">QR을 못 만들었어요.<br>아래 주소를 알려주세요.</div>'; return; }
+      try{
+        const qr = qrcode(0, 'M'); qr.addData(url); qr.make();
+        box.innerHTML = qr.createImgTag(10, 2);
+        const img = box.querySelector('img'); if(img){ img.removeAttribute('width'); img.removeAttribute('height'); }
+      }catch(e){ box.innerHTML = '<div style="color:#555">QR 생성 오류</div>'; }
+    });
+  }
+  loadQrLib(()=>{});   // 미리 불러두기
 
   document.getElementById('hStart').onclick = ()=>{ send({type:'start'}); document.getElementById('hostOverlay').classList.add('hidden'); };
   document.getElementById('hReset').onclick = ()=>{ send({type:'reset'}); document.getElementById('hostOverlay').classList.add('hidden'); };
@@ -761,6 +805,28 @@ function initPlayer(){
       renderBoard(c.canvas, p.board);
       grid.appendChild(c.el); // 순위 순서 반영
     });
+    lastOppCount = others.length;
+    layoutOpp(others.length);   // 인원수에 맞춰 칸 크기 자동 조절
+  }
+
+  // 상대 화면 칸 크기를 인원수+영역크기에 맞춰 계산 (스크롤 없이 다 들어가게)
+  let lastOppCount = 0;
+  function layoutOpp(n){
+    const grid = document.getElementById('oppGrid');
+    const W = grid.clientWidth, H = grid.clientHeight;
+    if(n<=0 || W<=0 || H<=0) return;
+    const gap=6, labelH=13, ar=2;        // 보드 높이 = 너비 * 2, 이름표 약 13px
+    let best=0, bestCols=1;
+    for(let cols=1; cols<=n; cols++){
+      const rows=Math.ceil(n/cols);
+      const cw=(W - gap*(cols-1))/cols;
+      const ch=(H - gap*(rows-1))/rows;
+      const bw=Math.min(cw, (ch - labelH)/ar);
+      if(bw>best){ best=bw; bestCols=cols; }
+    }
+    best = Math.max(14, Math.floor(best));   // 너무 작아지지 않게 하한
+    grid.style.gridTemplateColumns = 'repeat('+bestCols+','+best+'px)';
+    grid.style.setProperty('--bw', best+'px');
   }
 
   /* ---- 오버레이 ---- */
@@ -831,7 +897,7 @@ function initPlayer(){
     board.style.width  = (cs*COLS) + 'px';
     board.style.height = (cs*ROWS) + 'px';
   }
-  window.addEventListener('resize', fit);
+  window.addEventListener('resize', ()=>{ fit(); layoutOpp(lastOppCount); });
   setTimeout(fit, 50);
 
   connect(()=>{ if(state!=='name'){ send({type:'join', role:'player', name:myName, team:myTeam}); } });
