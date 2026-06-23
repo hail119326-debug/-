@@ -824,8 +824,8 @@ function initPlayer(){
       const bw=Math.min(cw, (ch - labelH)/ar);
       if(bw>best){ best=bw; bestCols=cols; }
     }
-    best = Math.max(14, Math.floor(best));      // 너무 작아지지 않게 하한
-    best = Math.min(best, boardCS * COLS);      // 내 보드 '전체 너비'보다 커지지 않게 상한
+    best = Math.max(14, Math.floor(best));            // 너무 작아지지 않게 하한
+    best = Math.min(best, Math.floor(boardCS * COLS * 0.7));  // 내 보드의 약 70%까지만
     grid.style.gridTemplateColumns = 'repeat('+bestCols+','+best+'px)';
     grid.style.setProperty('--bw', best+'px');
   }
@@ -889,7 +889,7 @@ function initPlayer(){
     let availH, availW;
     if(wide){
       availH = stage.clientHeight - 4;
-      availW = Math.min(500, stage.clientWidth * 0.5) - sideW;   // 내 보드를 더 크게
+      availW = stage.clientWidth * 0.55 - sideW;   // 너비 여유를 넉넉히 → 보드가 세로를 꽉 채움
     } else {
       availW = stage.clientWidth - sideW - 14;
       availH = (stage.clientHeight - 6) * 0.62;
