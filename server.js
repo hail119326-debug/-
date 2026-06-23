@@ -281,22 +281,13 @@ setInterval(() => {
   const ps = players();
   const teamMode = ps.some(p => p.meta.team);
   const rank = ps.map(p => ({
-    id: p.meta.id, name: p.meta.name, team: p.meta.team, score: p.meta.score, lines: p.meta.lines, alive: p.meta.alive,
+    id: p.meta.id, name: p.meta.name, team: p.meta.team, score: p.meta.score, lines: p.meta.lines, alive: p.meta.alive, board: p.meta.board,
   })).sort((a, b) => (b.alive - a.alive) || (b.score - a.score));
   const teams = teamSummary(ps);
 
-  // 학생에게: 순위표 + 팀 요약 (가벼움)
-  const lite = JSON.stringify({ type: 'leaderboard', phase: game.phase, players: rank, teams, count: ps.length });
-  for (const c of ps) c.send(lite);
-
-  // 상황판(교사)에게: 각 학생 보드까지 포함
-  const full = JSON.stringify({
-    type: 'hoststate', phase: game.phase, count: ps.length, teams,
-    players: ps.map(p => ({
-      id: p.meta.id, name: p.meta.name, team: p.meta.team, score: p.meta.score, lines: p.meta.lines, alive: p.meta.alive, board: p.meta.board,
-    })).sort((a, b) => (b.alive - a.alive) || (b.score - a.score)),
-  });
-  for (const c of hosts()) c.send(full);
+  // 모두에게(학생·상황판) 동일한 월드 상태 전송. 보드는 압축 문자열이라 가벼움.
+  const world = JSON.stringify({ type: 'world', phase: game.phase, count: ps.length, teams, players: rank });
+  for (const c of clients) c.send(world);
 
   // 승부 판정
   if (game.phase === 'playing' && ps.length > 0) {
@@ -316,7 +307,8 @@ setInterval(() => {
     }
     if (ended) {
       game.phase = 'ended';
-      broadcastAll({ type: 'gameover', players: rank, teams, teamMode, winnerTeam });
+      const result = rank.map(({ board, ...r }) => r);   // 결과 메시지엔 보드 제외
+      broadcastAll({ type: 'gameover', players: result, teams, teamMode, winnerTeam });
     }
   }
 }, 300);
