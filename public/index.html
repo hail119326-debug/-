@@ -36,19 +36,29 @@
   .topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:4px 8px}
   .topbar .me{font-weight:800;font-size:16px}
   .topbar .rank{color:var(--accent);font-weight:800}
-  .stage{flex:1;display:flex;gap:10px;min-height:0;justify-content:center}
+  .stage{flex:1;display:flex;gap:10px;min-height:0}
+  .mainCol{display:flex;gap:10px;min-height:0;flex:0 0 auto;justify-content:center}
   .boardWrap{position:relative;display:flex;align-items:center}
   #board{background:#070a14;border:1px solid var(--line);border-radius:10px;height:100%;max-height:100%;touch-action:none}
-  .side{display:flex;flex-direction:column;gap:10px;width:128px;min-width:96px}
+  .side{display:flex;flex-direction:column;gap:10px;width:120px;min-width:96px}
+  .oppWrap{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px}
+  .oppTitle{margin:0 0 6px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+  #oppGrid{flex:1;overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:6px;align-content:start}
+  .opp{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0}
+  .opp canvas{width:100%;display:block;background:#070a14;border-radius:4px;border:2px solid var(--line)}
+  .opp .on{font-size:9px;font-weight:700;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .opp.dead{opacity:.4}
+  @media (max-width:720px){
+    .stage{flex-direction:column}
+    .oppWrap{flex:1 1 auto;max-height:38vh}
+    .side{width:104px;min-width:84px}
+  }
   .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px}
   .card h3{margin:0 0 6px;font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase}
   #next{display:block;width:100%;background:#070a14;border-radius:8px}
   .stat{display:flex;justify-content:space-between;font-size:14px;margin:3px 0}
   .stat b{font-variant-numeric:tabular-nums}
-  #miniRank{font-size:12px;line-height:1.7;max-height:160px;overflow:hidden}
-  #miniRank .row{display:flex;justify-content:space-between;gap:6px}
-  #miniRank .row.you{color:var(--accent);font-weight:800}
-  #miniRank .dead{color:var(--muted);text-decoration:line-through}
 
   /* 터치 컨트롤 */
   #pad{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;padding:4px}
@@ -137,28 +147,30 @@
     <span class="rank" id="meRank"></span>
   </div>
   <div class="stage">
-    <div class="boardWrap">
-      <canvas id="board" width="200" height="400"></canvas>
-      <div class="overlay" id="playOverlay">
-        <h2 id="ovTitle">대기 중</h2>
-        <div class="big hidden" id="ovBig"></div>
-        <div class="sub" id="ovSub">선생님이 시작하면 자동으로 시작돼요</div>
+    <div class="mainCol">
+      <div class="boardWrap">
+        <canvas id="board" width="200" height="400"></canvas>
+        <div class="overlay" id="playOverlay">
+          <h2 id="ovTitle">대기 중</h2>
+          <div class="big hidden" id="ovBig"></div>
+          <div class="sub" id="ovSub">선생님이 시작하면 자동으로 시작돼요</div>
+        </div>
+      </div>
+      <div class="side">
+        <div class="card">
+          <h3>다음 5개</h3>
+          <canvas id="next" width="84" height="180"></canvas>
+        </div>
+        <div class="card">
+          <div class="stat"><span>점수</span><b id="score">0</b></div>
+          <div class="stat"><span>줄</span><b id="lines">0</b></div>
+          <div class="stat"><span>레벨</span><b id="level">1</b></div>
+        </div>
       </div>
     </div>
-    <div class="side">
-      <div class="card">
-        <h3>다음</h3>
-        <canvas id="next" width="96" height="72"></canvas>
-      </div>
-      <div class="card">
-        <div class="stat"><span>점수</span><b id="score">0</b></div>
-        <div class="stat"><span>줄</span><b id="lines">0</b></div>
-        <div class="stat"><span>레벨</span><b id="level">1</b></div>
-      </div>
-      <div class="card" style="flex:1">
-        <h3>실시간 순위</h3>
-        <div id="miniRank"></div>
-      </div>
+    <div class="oppWrap">
+      <h3 class="oppTitle">다른 플레이어 <span id="oppCount"></span></h3>
+      <div id="oppGrid"></div>
     </div>
   </div>
   <div id="pad">
@@ -254,13 +266,18 @@ function drawCell(ctx, x, y, cell, cs){
   ctx.strokeStyle = 'rgba(0,0,0,.35)';
   ctx.strokeRect(x*cs+.5, y*cs+.5, cs-1, cs-1);
 }
-// 20x10 정수 배열을 캔버스에 그리기 (상황판/미리보기 공용)
-function renderBoard(canvas, grid){
+// 보드를 가벼운 문자열로 인코딩/디코딩 (셀당 1글자, 0~8)
+function encodeBoard(grid){ let s=''; for(let y=0;y<ROWS;y++){ const r=grid[y]; for(let x=0;x<COLS;x++) s += (r[x]||0); } return s; }
+function decodeBoard(s){ const g=[]; for(let y=0;y<ROWS;y++){ const row=[]; for(let x=0;x<COLS;x++){ const v=s.charCodeAt(y*COLS+x)-48; row.push(v>=0&&v<=8?v:0); } g.push(row); } return g; }
+function toGrid(b){ return (typeof b==='string') ? decodeBoard(b) : b; }
+
+// 20x10 보드(문자열 또는 2D배열)를 캔버스에 그리기 (상황판/상대화면 공용)
+function renderBoard(canvas, board){
   const ctx = canvas.getContext('2d');
   const cs = canvas.width / COLS;
   ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.fillStyle = '#070a14'; ctx.fillRect(0,0,canvas.width,canvas.height);
-  if(!grid) return;
+  const grid = toGrid(board); if(!grid) return;
   for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++) drawCell(ctx,x,y,grid[y][x],cs);
 }
 
@@ -317,7 +334,7 @@ function initHost(){
 
   window.onServer = (m)=>{
     if(m.type==='welcome'){ myId=m.id; return; }
-    if(m.type==='hoststate'){ renderHost(m); return; }
+    if(m.type==='world'){ renderHost(m); return; }
     if(m.type==='gameover'){ showWinner(m); return; }
   };
 
@@ -482,7 +499,7 @@ function initPlayer(){
     if(m.type==='team'){ setMyTeam(m.team); return; }
     if(m.type==='garbage'){ if(G && state==='playing') addGarbage(m.amount); return; }
     if(m.type==='gameover'){ onGameOver(m); return; }
-    if(m.type==='leaderboard'){ renderMiniRank(m.players); return; }
+    if(m.type==='world'){ onWorld(m); return; }
   };
 
   function toWaiting(){
@@ -520,16 +537,18 @@ function initPlayer(){
   function newGame(){
     return {
       grid: Array.from({length:ROWS},()=>Array(COLS).fill(0)),
-      cur:null, next:null, bag:[], score:0, lines:0, level:1, down:false, over:false,
+      cur:null, queue:[], bag:[], score:0, lines:0, level:1, down:false, over:false,
     };
   }
   function bagNext(g){
     if(g.bag.length===0){ g.bag = TYPES.slice(); for(let i=g.bag.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[g.bag[i],g.bag[j]]=[g.bag[j],g.bag[i]];} }
     return g.bag.pop();
   }
+  function ensureQueue(g){ while(g.queue.length < 7) g.queue.push(bagNext(g)); }   // 다음 5개 + 여유
   function spawn(g){
-    const type = g.next || bagNext(g);
-    g.next = bagNext(g);
+    ensureQueue(g);
+    const type = g.queue.shift();
+    ensureQueue(g);
     const mat = SHAPES[type].map(r=>r.slice());
     const piece = { type, mat, r:0, c:((COLS - mat[0].length)>>1) };
     if(collide(g, piece)){ g.over=true; return; }
@@ -632,7 +651,7 @@ function initPlayer(){
     }
     return out;
   }
-  function sendState(){ send({type:'state', score:G.score, lines:G.lines, board:snapshot()}); }
+  function sendState(){ send({type:'state', score:G.score, lines:G.lines, board:encodeBoard(snapshot())}); }
   function updateStats(){
     document.getElementById('score').textContent=G.score;
     document.getElementById('lines').textContent=G.lines;
@@ -663,13 +682,21 @@ function initPlayer(){
   }
   function drawNext(){
     nctx.clearRect(0,0,nextCv.width,nextCv.height);
-    if(!G.next) return;
-    const mat=SHAPES[G.next], t=TI[G.next], cs=16;
-    const w=mat[0].length*cs, h=mat.length*cs;
-    const ox=(nextCv.width-w)/2, oy=(nextCv.height-h)/2;
-    for(let y=0;y<mat.length;y++) for(let x=0;x<mat[y].length;x++) if(mat[y][x]){
-      nctx.fillStyle=COLOR[t]; nctx.fillRect(ox+x*cs,oy+y*cs,cs,cs);
-      nctx.strokeStyle='rgba(0,0,0,.35)'; nctx.strokeRect(ox+x*cs+.5,oy+y*cs+.5,cs-1,cs-1);
+    const n = Math.min(5, G.queue.length), cell = 12, rowH = nextCv.height/5;
+    for(let k=0;k<n;k++){
+      const type=G.queue[k], mat=SHAPES[type], t=TI[type];
+      // 채워진 칸의 경계만 잡아서 가운데 정렬 (빈 줄 때문에 칸 벗어나는 것 방지)
+      let minx=9,miny=9,maxx=-1,maxy=-1;
+      for(let y=0;y<mat.length;y++) for(let x=0;x<mat[y].length;x++) if(mat[y][x]){
+        if(x<minx)minx=x; if(x>maxx)maxx=x; if(y<miny)miny=y; if(y>maxy)maxy=y;
+      }
+      const w=(maxx-minx+1)*cell, h=(maxy-miny+1)*cell;
+      const ox=(nextCv.width-w)/2, oy=k*rowH+(rowH-h)/2;
+      for(let y=miny;y<=maxy;y++) for(let x=minx;x<=maxx;x++) if(mat[y][x]){
+        const px=ox+(x-minx)*cell, py=oy+(y-miny)*cell;
+        nctx.fillStyle=COLOR[t]; nctx.fillRect(px,py,cell,cell);
+        nctx.strokeStyle='rgba(0,0,0,.35)'; nctx.strokeRect(px+.5,py+.5,cell-1,cell-1);
+      }
     }
   }
   function clearBoard(){ bctx.fillStyle='#070a14'; bctx.fillRect(0,0,board.width,board.height); nctx.clearRect(0,0,nextCv.width,nextCv.height); }
@@ -699,20 +726,41 @@ function initPlayer(){
     }
   }
 
-  /* ---- 미니 순위표 (학생 화면 우측) ---- */
-  function renderMiniRank(list){
-    const box=document.getElementById('miniRank');
-    const meIdx=list.findIndex(p=>p.id===myId);
-    document.getElementById('meRank').textContent = meIdx>=0 ? ((meIdx+1)+' / '+list.length+'위') : '';
-    const top=list.slice(0,5);
-    let html=top.map((p,i)=>rowHtml(i+1,p)).join('');
-    if(meIdx>=5) html+='<div style="color:var(--muted)">…</div>'+rowHtml(meIdx+1,list[meIdx]);
-    box.innerHTML=html;
-  }
-  function rowHtml(pos,p){
-    const you=p.id===myId?' you':''; const dead=p.alive?'':' dead';
-    const ti=TEAM_BY_ID[p.team]; const col=ti?(' style="color:'+ti.color+'"'):'';
-    return `<div class="row${you}"><span class="${dead}"${col}>${pos}. ${esc(p.name)}</span><b>${p.score}</b></div>`;
+  /* ---- 상대방 화면 그리드 (나 제외, 전부 / 팀 색으로 구분) ---- */
+  const oppCards = new Map(); // id -> {el, canvas, nm}
+  function onWorld(m){
+    // 내 순위
+    const meIdx = m.players.findIndex(p=>p.id===myId);
+    document.getElementById('meRank').textContent = meIdx>=0 ? ((meIdx+1)+' / '+m.players.length+'위') : '';
+
+    const others = m.players.filter(p=>p.id!==myId);
+    document.getElementById('oppCount').textContent = '('+others.length+')';
+    const grid = document.getElementById('oppGrid');
+    const ids = new Set(others.map(p=>p.id));
+    for(const [id,c] of oppCards){ if(!ids.has(id)){ c.el.remove(); oppCards.delete(id); } }
+    if(others.length===0){
+      if(!grid.querySelector('.oppEmpty'))
+        grid.innerHTML = '<div class="oppEmpty" style="grid-column:1/-1;color:var(--muted);font-size:11px;text-align:center;padding:10px">다른 플레이어가 들어오면 여기에 표시돼요</div>';
+      return;
+    } else { const e=grid.querySelector('.oppEmpty'); if(e) e.remove(); }
+
+    others.forEach(p=>{
+      let c = oppCards.get(p.id);
+      if(!c){
+        const el = document.createElement('div'); el.className='opp';
+        const cv = document.createElement('canvas'); cv.width=50; cv.height=100;
+        const nm = document.createElement('div'); nm.className='on';
+        el.append(cv,nm); grid.appendChild(el);
+        c = {el, canvas:cv, nm}; oppCards.set(p.id, c);
+      }
+      c.el.className = 'opp' + (p.alive?'':' dead');
+      const ti = TEAM_BY_ID[p.team];
+      c.canvas.style.borderColor = ti ? ti.color : 'var(--line)';  // 팀 색 테두리
+      c.nm.textContent = p.name;
+      c.nm.style.color = ti ? ti.color : 'var(--text)';
+      renderBoard(c.canvas, p.board);
+      grid.appendChild(c.el); // 순위 순서 반영
+    });
   }
 
   /* ---- 오버레이 ---- */
@@ -764,15 +812,21 @@ function initPlayer(){
     draw();
   }
 
-  // 보드 캔버스를 화면 크기에 맞춰 조정 (가로·세로 모두 고려)
+  // 보드 캔버스를 화면 크기에 맞춰 조정 (PC: 상대화면이 오른쪽 / 모바일: 아래)
   function fit(){
-    const stage = board.closest('.stage');
-    if(!stage) return;
+    const stage = board.closest('.stage'); if(!stage) return;
     const side = document.querySelector('.side');
-    const sideW = side ? side.offsetWidth : 128;
-    const availH = stage.clientHeight - 4;
-    const availW = stage.clientWidth - sideW - 16;   // 보드~사이드 간격 포함
-    if(availH <= 0 || availW <= 0) return;            // 아직 화면에 안 보이면 패스
+    const sideW = side ? side.offsetWidth : 110;
+    const wide = window.innerWidth >= 720;
+    let availH, availW;
+    if(wide){
+      availH = stage.clientHeight - 4;
+      availW = Math.min(360, stage.clientWidth * 0.45) - sideW;   // 보드 너비 상한 (오른쪽에 상대화면 공간 확보)
+    } else {
+      availW = stage.clientWidth - sideW - 14;
+      availH = (stage.clientHeight - 6) * 0.60;                   // 위 60%만 보드, 아래는 상대화면
+    }
+    if(availH <= 0 || availW <= 0) return;
     const cs = Math.max(8, Math.floor(Math.min(availH/ROWS, availW/COLS)));
     board.style.width  = (cs*COLS) + 'px';
     board.style.height = (cs*ROWS) + 'px';
