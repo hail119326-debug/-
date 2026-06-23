@@ -40,7 +40,7 @@
   .mainCol{display:flex;gap:10px;min-height:0;flex:0 0 auto;justify-content:center;order:2}   /* 내 보드: 오른쪽 */
   .boardWrap{position:relative;display:flex;align-items:center}
   #board{background:#070a14;border:1px solid var(--line);border-radius:10px;height:100%;max-height:100%;touch-action:none}
-  .side{display:flex;flex-direction:column;gap:10px;width:120px;min-width:96px}
+  .side{display:flex;flex-direction:column;gap:10px;width:140px;min-width:120px}
   .oppWrap{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;order:1;             /* 상대 화면: 왼쪽 */
     background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px}
   .oppTitle{margin:0 0 6px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
@@ -53,13 +53,13 @@
     .stage{flex-direction:column}
     .mainCol{order:1}     /* 모바일에선 내 보드를 위로 */
     .oppWrap{order:2;flex:1 1 auto;max-height:38vh}
-    .side{width:104px;min-width:84px}
+    .side{width:120px;min-width:108px}
   }
   .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px}
   .card h3{margin:0 0 6px;font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase}
   #next{display:block;width:100%;background:#070a14;border-radius:8px}
-  .stat{display:flex;justify-content:space-between;font-size:14px;margin:3px 0}
-  .stat b{font-variant-numeric:tabular-nums}
+  .stat{display:flex;justify-content:space-between;align-items:baseline;font-size:14px;margin:8px 2px;color:var(--muted)}
+  .stat b{font-size:26px;font-weight:900;color:var(--text);font-variant-numeric:tabular-nums;line-height:1}
 
   /* 터치 컨트롤 */
   #pad{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;padding:4px}
@@ -167,7 +167,7 @@
       <div class="side">
         <div class="card">
           <h3>다음 5개</h3>
-          <canvas id="next" width="84" height="180"></canvas>
+          <canvas id="next" width="96" height="240"></canvas>
         </div>
         <div class="card">
           <div class="stat"><span>점수</span><b id="score">0</b></div>
@@ -726,7 +726,7 @@ function initPlayer(){
   }
   function drawNext(){
     nctx.clearRect(0,0,nextCv.width,nextCv.height);
-    const n = Math.min(5, G.queue.length), cell = 12, rowH = nextCv.height/5;
+    const n = Math.min(5, G.queue.length), cell = 15, rowH = nextCv.height/5;
     for(let k=0;k<n;k++){
       const type=G.queue[k], mat=SHAPES[type], t=TI[type];
       // 채워진 칸의 경계만 잡아서 가운데 정렬 (빈 줄 때문에 칸 벗어나는 것 방지)
@@ -825,6 +825,7 @@ function initPlayer(){
       if(bw>best){ best=bw; bestCols=cols; }
     }
     best = Math.max(14, Math.floor(best));   // 너무 작아지지 않게 하한
+    best = Math.min(best, boardCS);          // 내 보드보다 커지지 않게 상한
     grid.style.gridTemplateColumns = 'repeat('+bestCols+','+best+'px)';
     grid.style.setProperty('--bw', best+'px');
   }
@@ -879,25 +880,28 @@ function initPlayer(){
   }
 
   // 보드 캔버스를 화면 크기에 맞춰 조정 (PC: 상대화면이 오른쪽 / 모바일: 아래)
+  let boardCS = 20;   // 내 보드의 셀 크기 (상대 화면 상한으로 사용)
   function fit(){
     const stage = board.closest('.stage'); if(!stage) return;
     const side = document.querySelector('.side');
-    const sideW = side ? side.offsetWidth : 110;
+    const sideW = side ? side.offsetWidth : 130;
     const wide = window.innerWidth >= 720;
     let availH, availW;
     if(wide){
       availH = stage.clientHeight - 4;
-      availW = Math.min(360, stage.clientWidth * 0.45) - sideW;   // 보드 너비 상한 (오른쪽에 상대화면 공간 확보)
+      availW = Math.min(500, stage.clientWidth * 0.5) - sideW;   // 내 보드를 더 크게
     } else {
       availW = stage.clientWidth - sideW - 14;
-      availH = (stage.clientHeight - 6) * 0.60;                   // 위 60%만 보드, 아래는 상대화면
+      availH = (stage.clientHeight - 6) * 0.62;
     }
     if(availH <= 0 || availW <= 0) return;
     const cs = Math.max(8, Math.floor(Math.min(availH/ROWS, availW/COLS)));
+    boardCS = cs;
     board.style.width  = (cs*COLS) + 'px';
     board.style.height = (cs*ROWS) + 'px';
+    layoutOpp(lastOppCount);   // 보드 크기 바뀌면 상대 화면 상한도 갱신
   }
-  window.addEventListener('resize', ()=>{ fit(); layoutOpp(lastOppCount); });
+  window.addEventListener('resize', ()=>{ fit(); });
   setTimeout(fit, 50);
 
   connect(()=>{ if(state!=='name'){ send({type:'join', role:'player', name:myName, team:myTeam}); } });
