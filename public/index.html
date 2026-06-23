@@ -824,8 +824,8 @@ function initPlayer(){
       const bw=Math.min(cw, (ch - labelH)/ar);
       if(bw>best){ best=bw; bestCols=cols; }
     }
-    best = Math.max(14, Math.floor(best));   // 너무 작아지지 않게 하한
-    best = Math.min(best, boardCS);          // 내 보드보다 커지지 않게 상한
+    best = Math.max(14, Math.floor(best));      // 너무 작아지지 않게 하한
+    best = Math.min(best, boardCS * COLS);      // 내 보드 '전체 너비'보다 커지지 않게 상한
     grid.style.gridTemplateColumns = 'repeat('+bestCols+','+best+'px)';
     grid.style.setProperty('--bw', best+'px');
   }
