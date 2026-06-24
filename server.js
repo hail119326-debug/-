@@ -172,7 +172,7 @@ function handleMessage(ws, raw) {
       ws.meta.name = (m.name || '학생').toString().slice(0, 14);
       ws.meta.team = (m.team || '').toString().slice(0, 16);   // 팀 id (없으면 미배정)
       ws.meta.score = 0; ws.meta.lines = 0; ws.meta.alive = false; ws.meta.board = null;
-      ws.meta.atk = 0; ws.meta.maxCombo = 0; ws.meta.wbonus = 0;
+      ws.meta.atk = 0; ws.meta.maxCombo = 0; ws.meta.wbonus = 0; ws.meta.cbonus = 0;
       ws.send(JSON.stringify({ type: 'welcome', id: ws.meta.id, phase: game.phase }));
       if (ws.meta.role === 'player') {
         // 팀을 안 들고 들어왔는데 교사가 팀을 운영 중이면 → 인원이 가장 적은 팀에 자동 배치
@@ -188,11 +188,11 @@ function handleMessage(ws, raw) {
       break;
     case 'state':
       ws.meta.score = m.score | 0; ws.meta.lines = m.lines | 0; ws.meta.board = m.board || null;
-      ws.meta.atk = m.atk | 0; ws.meta.maxCombo = m.combo | 0; ws.meta.wbonus = m.wbonus | 0;
+      ws.meta.atk = m.atk | 0; ws.meta.maxCombo = m.combo | 0; ws.meta.wbonus = m.wbonus | 0; ws.meta.cbonus = m.cbonus | 0;
       break;
     case 'topout':
       ws.meta.alive = false; ws.meta.score = m.score | 0; ws.meta.lines = m.lines | 0;
-      ws.meta.atk = m.atk | 0; ws.meta.maxCombo = m.combo | 0; ws.meta.wbonus = m.wbonus | 0;
+      ws.meta.atk = m.atk | 0; ws.meta.maxCombo = m.combo | 0; ws.meta.wbonus = m.wbonus | 0; ws.meta.cbonus = m.cbonus | 0;
       break;
     case 'attack':
       sendGarbage(ws, m.amount | 0);
@@ -240,7 +240,7 @@ function handleMessage(ws, raw) {
 
 function startGame() {
   game.phase = 'playing'; game.ending = false;
-  for (const p of players()) { p.meta.alive = true; p.meta.score = 0; p.meta.lines = 0; p.meta.board = null; p.meta.atk = 0; p.meta.maxCombo = 0; p.meta.wbonus = 0; }
+  for (const p of players()) { p.meta.alive = true; p.meta.score = 0; p.meta.lines = 0; p.meta.board = null; p.meta.atk = 0; p.meta.maxCombo = 0; p.meta.wbonus = 0; p.meta.cbonus = 0; }
   broadcastAll({ type: 'start' });
 }
 function resetGame() {
@@ -309,7 +309,7 @@ setInterval(() => {
   const teamMode = ps.some(p => p.meta.team);
   const rank = ps.map(p => ({
     id: p.meta.id, name: p.meta.name, team: p.meta.team, score: p.meta.score, lines: p.meta.lines, alive: p.meta.alive, board: p.meta.board,
-    atk: p.meta.atk || 0, combo: p.meta.maxCombo || 0, wbonus: p.meta.wbonus || 0,
+    atk: p.meta.atk || 0, combo: p.meta.maxCombo || 0, wbonus: p.meta.wbonus || 0, cbonus: p.meta.cbonus || 0,
   })).sort((a, b) => (b.alive - a.alive) || (b.score - a.score));
   const teams = teamSummary(ps);
 
@@ -341,7 +341,7 @@ function finishGame(rank, teams, teamMode) {
     teamMode = ps.some(p => p.meta.team);
     rank = ps.map(p => ({
       id: p.meta.id, name: p.meta.name, team: p.meta.team, score: p.meta.score, lines: p.meta.lines, alive: p.meta.alive, board: p.meta.board,
-      atk: p.meta.atk || 0, combo: p.meta.maxCombo || 0, wbonus: p.meta.wbonus || 0,
+      atk: p.meta.atk || 0, combo: p.meta.maxCombo || 0, wbonus: p.meta.wbonus || 0, cbonus: p.meta.cbonus || 0,
     })).sort((a, b) => (b.alive - a.alive) || (b.score - a.score));
     teams = teamSummary(ps);
   }
