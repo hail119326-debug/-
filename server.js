@@ -292,26 +292,31 @@ setInterval(() => {
   const world = JSON.stringify({ type: 'world', phase: game.phase, count: ps.length, teams, players: rank });
   for (const c of clients) c.send(world);
 
-  // 승부 판정
+  // 승부 판정 (종료 시점: 전멸 또는 마지막 1명/1팀 생존 / 우승은 '점수 우선')
   if (game.phase === 'playing' && ps.length > 0) {
     const alive = ps.filter(p => p.meta.alive);
-    let ended = false, winnerTeam = null;
+    let ended = false;
     if (teamMode) {
       const aliveTeams = new Set(alive.map(p => p.meta.team));
       const allTeams = new Set(ps.map(p => p.meta.team));
-      if (alive.length === 0) {                                  // 전멸 → 총점 1위 팀 우승
-        ended = true; winnerTeam = teams[0] ? teams[0].team : null;
-      } else if (allTeams.size > 1 && aliveTeams.size === 1) {   // 한 팀만 생존 → 그 팀 우승
-        ended = true; winnerTeam = [...aliveTeams][0];
-      }
+      if (alive.length === 0 || (allTeams.size > 1 && aliveTeams.size === 1)) ended = true;
     } else {
       const lastStanding = ps.length > 1 && alive.length === 1;
       if (lastStanding || alive.length === 0) ended = true;
     }
     if (ended) {
       game.phase = 'ended';
-      const result = rank.map(({ board, ...r }) => r);   // 결과 메시지엔 보드 제외
-      broadcastAll({ type: 'gameover', players: result, teams, teamMode, winnerTeam });
+      const result = rank.map(({ board, ...r }) => r).sort((a, b) => b.score - a.score); // 점수순 최종 순위
+      let winnerTeam = null, winnerTeams = [], winnerNames = [];
+      if (teamMode && teams[0]) {
+        const top = teams[0].avg;                                  // 평균 1위
+        winnerTeams = teams.filter(t => t.team && t.avg === top).map(t => t.team);
+        winnerTeam = winnerTeams[0];                               // 대표 1팀(하위호환)
+      } else if (!teamMode && result[0]) {
+        const top = result[0].score;                               // 점수 1위
+        winnerNames = result.filter(p => p.score === top).map(p => p.name);
+      }
+      broadcastAll({ type: 'gameover', players: result, teams, teamMode, winnerTeam, winnerTeams, winnerNames });
     }
   }
 }, 300);
