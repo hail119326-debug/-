@@ -155,16 +155,18 @@
   .tcard .tbarfill > span{display:block;height:100%;background:var(--tc);border-radius:999px;transition:width .3s}
   .teamCtl{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
   .teamCtl select{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:3px 8px;font-size:15px;font-weight:800;margin-left:6px}
-  .teamCtl input{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:15px;font-weight:700;width:130px}
-  .teamCtl input:focus{outline:none;border-color:var(--accent)}
-  /* 학생 키워드 수집 바 */
-  .boardCol{display:flex;flex-direction:column;gap:8px;min-height:0}
-  .wordBar{display:none;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px;
-    background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 10px}
-  .wordBar .kwLabel{font-size:11px;color:var(--muted);font-weight:800;margin-right:4px}
-  .wordSlot{width:30px;height:34px;border-radius:7px;border:2px dashed var(--line);display:flex;align-items:center;justify-content:center;
-    font-size:18px;font-weight:900;color:var(--muted)}
-  .wordSlot.got{border-style:solid;border-color:var(--good);background:rgba(52,211,153,.16);color:var(--text)}
+  .teamCtl textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:14px;font-weight:700;width:170px;resize:vertical;font-family:inherit}
+  .teamCtl textarea:focus{outline:none;border-color:var(--accent)}
+  /* 학생 사이드 키워드 목록 */
+  #wordCard #wordList{display:flex;flex-direction:column;gap:5px;max-height:34vh;overflow:auto}
+  .wordItem{display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:8px;background:var(--panel2);
+    border:1px solid var(--line);font-weight:800;font-size:14px;letter-spacing:1px;
+    filter:grayscale(1) brightness(.75);transition:filter .3s, background .3s, border-color .3s}
+  .wordItem.cur{border-color:var(--accent);filter:grayscale(.55) brightness(.9)}
+  .wordItem.done{filter:none;background:rgba(52,211,153,.18);border-color:var(--good)}
+  .wordItem .wi-ico{font-size:13px}
+  .wordItem .wi-prog{margin-left:auto;font-size:11px;color:var(--muted);font-weight:700}
+  .wordItem.done .wi-prog{color:var(--good)}
   .hbtn.assign{background:linear-gradient(90deg,var(--accent2),var(--accent))}
   .pcard{cursor:pointer}
   .pcard .pt{font-size:11px;font-weight:800;padding:2px 10px;border-radius:999px;background:var(--panel2);color:var(--muted)}
@@ -190,16 +192,13 @@
   </div>
   <div class="stage">
     <div class="mainCol">
-      <div class="boardCol">
-        <div class="boardWrap">
-          <canvas id="board" width="200" height="400"></canvas>
-          <div class="overlay" id="playOverlay">
-            <h2 id="ovTitle">대기 중</h2>
-            <div class="big hidden" id="ovBig"></div>
-            <div class="sub" id="ovSub">선생님이 시작하면 자동으로 시작돼요</div>
-          </div>
+      <div class="boardWrap">
+        <canvas id="board" width="200" height="400"></canvas>
+        <div class="overlay" id="playOverlay">
+          <h2 id="ovTitle">대기 중</h2>
+          <div class="big hidden" id="ovBig"></div>
+          <div class="sub" id="ovSub">선생님이 시작하면 자동으로 시작돼요</div>
         </div>
-        <div id="wordBar" class="wordBar"></div>
       </div>
       <div class="side">
         <div class="card">
@@ -210,6 +209,10 @@
           <div class="stat"><span>점수</span><b id="score">0</b></div>
           <div class="stat"><span>줄</span><b id="lines">0</b></div>
           <div class="stat"><span>레벨</span><b id="level">1</b></div>
+        </div>
+        <div class="card hidden" id="wordCard">
+          <h3>📚 키워드 <span id="wordProg" style="color:var(--muted);font-weight:700"></span></h3>
+          <div id="wordList"></div>
         </div>
       </div>
     </div>
@@ -259,10 +262,12 @@
     <span class="pill" style="color:var(--muted)">학생 카드를 누르면 팀이 바뀌어요</span>
   </div>
   <div class="teamCtl">
-    <span class="pill">📚 학습 키워드</span>
-    <input id="hKeyword" maxlength="12" placeholder="예: 광합성" />
-    <button class="hbtn assign" id="hSetKw">키워드 등록</button>
-    <button class="hbtn reset" id="hClearKw">키워드 지우기</button>
+    <span class="pill">📚 학습 키워드 <span style="color:var(--muted);font-weight:700">(한 줄에 하나, 최대 20개)</span></span>
+    <textarea id="hKeyword" rows="3" placeholder="광합성&#10;엽록체&#10;기공"></textarea>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <button class="hbtn assign" id="hSetKw">키워드 등록</button>
+      <button class="hbtn reset" id="hClearKw">키워드 지우기</button>
+    </div>
     <span class="pill" id="kwNow" style="color:var(--muted)">등록된 키워드 없음</span>
   </div>
   <div class="joinUrls" id="joinUrls"><span class="pill">학생 접속 주소 불러오는 중…</span></div>
@@ -477,12 +482,14 @@ function initHost(){
   document.getElementById('hAssign').onclick = ()=> send({type:'autoassign', teams: activeTeamIds()});
   document.getElementById('hClear').onclick  = ()=> send({type:'clearteams'});
 
-  // 학습 키워드 등록/지우기
+  // 학습 키워드 등록/지우기 (여러 개)
   const kwInput = document.getElementById('hKeyword');
-  function setKw(){ const w=kwInput.value.trim(); send({type:'setkeyword', word:w}); }
+  function setKw(){
+    const words = kwInput.value.split('\n').map(s=>s.trim()).filter(Boolean);
+    send({type:'setkeyword', words});
+  }
   document.getElementById('hSetKw').onclick = setKw;
-  kwInput.addEventListener('keydown', e=>{ if(e.key==='Enter') setKw(); });
-  document.getElementById('hClearKw').onclick = ()=>{ kwInput.value=''; send({type:'setkeyword', word:''}); };
+  document.getElementById('hClearKw').onclick = ()=>{ kwInput.value=''; send({type:'setkeyword', words:[]}); };
   function cycleTeam(id, cur){
     const a = activeTeamIds(); const i = a.indexOf(cur);
     send({type:'assign', id, team: a[(i+1) % a.length]});  // 다음 팀으로 변경(미배정이면 첫 팀)
@@ -493,8 +500,9 @@ function initHost(){
     if(m.type==='welcome'){ myId=m.id; return; }
     if(m.type==='world'){ renderHost(m); return; }
     if(m.type==='gameover'){ showWinner(m); return; }
-    if(m.type==='keyword'){
-      document.getElementById('kwNow').textContent = m.word ? ('현재 키워드: '+m.word) : '등록된 키워드 없음';
+    if(m.type==='keywords'){
+      const n = (m.words||[]).length;
+      document.getElementById('kwNow').textContent = n ? ('등록됨: '+m.words.join(', ')) : '등록된 키워드 없음';
       return;
     }
   };
@@ -669,56 +677,63 @@ function initPlayer(){
     if(m.type==='garbage'){ if(G && state==='playing') addGarbage(m.amount); return; }
     if(m.type==='gameover'){ onGameOver(m); return; }
     if(m.type==='world'){ onWorld(m); return; }
-    if(m.type==='keyword'){ setKeyword(m.word); return; }
+    if(m.type==='keywords'){ setKeywords(m.words); return; }
   };
 
-  /* ===== 학습 키워드 수집 ===== */
-  let kw = '';            // 현재 키워드 (예: "광합성")
-  let kwReq = {};         // 글자별 필요 개수
-  let kwHave = {};        // 글자별 모은 개수
-  function setKeyword(word){
-    kw = (word||'').toString();
-    kwReq = {}; for(const ch of kw){ kwReq[ch]=(kwReq[ch]||0)+1; }
-    resetCollection();
-    renderWordBar(false);
-    fit();                // 수집 바가 생기면 보드 높이 재계산
+  /* ===== 학습 키워드 수집 (여러 단어, 순서대로) ===== */
+  let kwList = [];     // 등록된 단어들
+  let kwDone = [];     // 단어별 완성 여부
+  let kwIdx = -1;      // 지금 모으는 단어 index
+  let curReq = {}, curHave = {};   // 현재 단어 글자별 필요/보유 개수
+  function setKeywords(words){
+    kwList = Array.isArray(words) ? words.slice(0,20) : [];
+    resetAllCollection();
+    renderWordList();
+    document.getElementById('wordCard').classList.toggle('hidden', kwList.length===0);
   }
-  function resetCollection(){ kwHave = {}; for(const ch in kwReq) kwHave[ch]=0; }
-  function wordComplete(){ for(const ch in kwReq){ if((kwHave[ch]||0) < kwReq[ch]) return false; } return kw.length>0; }
-  // 다음 조각에 붙일 글자 (아직 다 못 모은 글자 중 랜덤). 없으면 null
+  function resetAllCollection(){ kwDone = kwList.map(()=>false); pointToCurrent(); }
+  function pointToCurrent(){
+    kwIdx = kwDone.findIndex(d=>!d);
+    curReq = {}; curHave = {};
+    if(kwIdx>=0){ for(const ch of kwList[kwIdx]){ curReq[ch]=(curReq[ch]||0)+1; } for(const ch in curReq) curHave[ch]=0; }
+  }
+  function curComplete(){ for(const ch in curReq){ if((curHave[ch]||0)<curReq[ch]) return false; } return kwIdx>=0; }
+  // 현재 단어에서 아직 필요한 글자 중 랜덤 (없으면 null → 조각에 글자 안 붙음)
   function pickLetter(){
-    if(!kw) return null;
-    const need = Object.keys(kwReq).filter(ch => (kwHave[ch]||0) < kwReq[ch]);
-    if(!need.length) return null;
-    return need[(Math.random()*need.length)|0];
+    if(kwIdx<0) return null;
+    const need = Object.keys(curReq).filter(ch=>(curHave[ch]||0)<curReq[ch]);
+    return need.length ? need[(Math.random()*need.length)|0] : null;
   }
   function collectLetter(ch){
-    if(kwReq[ch]==null) return;
-    if((kwHave[ch]||0) < kwReq[ch]) kwHave[ch]++;
-    if(wordComplete()){
-      G.score += 500;                 // 단어 완성 보너스
-      updateStats(); sendState();
-      flashWord();
-      setTimeout(()=>{ resetCollection(); renderWordBar(false); }, 1200);  // 다시 모으기 가능
+    if(kwIdx<0 || curReq[ch]==null) return;          // 현재 단어 글자가 아니면 무시
+    if((curHave[ch]||0) < curReq[ch]) curHave[ch]++;
+    if(curComplete()){
+      kwDone[kwIdx] = true;
+      G.score += 500; updateStats(); sendState();    // 단어 완성 보너스
+      pointToCurrent();                               // 다음 단어로
     }
-    renderWordBar(false);
+    renderWordList();
   }
-  function renderWordBar(done){
-    const bar = document.getElementById('wordBar');
-    if(!kw){ bar.style.display='none'; bar.innerHTML=''; return; }
-    bar.style.display='flex';
-    // 각 글자 슬롯 채움 여부 (같은 글자는 왼쪽부터 채움)
-    const seen = {};
-    let html = '<span class="kwLabel">키워드</span>';
-    for(const ch of kw){
-      seen[ch]=(seen[ch]||0)+1;
-      const got = (kwHave[ch]||0) >= seen[ch];
-      html += `<span class="wordSlot${got?' got':''}">${got?esc(ch):'?'}</span>`;
-    }
-    if(done) html += '<span class="kwLabel" style="color:var(--good)">완성! +500</span>';
-    bar.innerHTML = html;
+  function renderWordList(){
+    const list = document.getElementById('wordList');
+    if(!list) return;
+    const doneCnt = kwDone.filter(Boolean).length;
+    const prog = document.getElementById('wordProg');
+    if(prog) prog.textContent = kwList.length ? (doneCnt+'/'+kwList.length) : '';
+    list.innerHTML = kwList.map((w,i)=>{
+      const done = kwDone[i], cur = (i===kwIdx);
+      let ico = done ? '✅' : (cur ? '✏️' : '🔒');
+      let sub = '';
+      if(cur && !done){
+        // 현재 단어: 모은 글자 수 표시
+        let have=0, need=0; const seen={};
+        for(const ch of w){ need++; seen[ch]=(seen[ch]||0)+1; if((curHave[ch]||0)>=seen[ch]) have++; }
+        sub = '<span class="wi-prog">'+have+'/'+need+'</span>';
+      }
+      const cls = 'wordItem' + (done?' done':'') + (cur?' cur':'');
+      return '<div class="'+cls+'"><span class="wi-ico">'+ico+'</span><span>'+esc(w)+'</span>'+sub+'</div>';
+    }).join('');
   }
-  function flashWord(){ renderWordBar(true); }
 
   function toWaiting(){
     state='waiting'; cancelAnimationFrame(raf); G=null;
@@ -772,8 +787,8 @@ function initPlayer(){
     ensureQueue(g);
     const mat = SHAPES[type].map(r=>r.slice());
     const piece = { type, mat, r:0, c:((COLS - mat[0].length)>>1), lc:null };
-    // 키워드가 있으면 절반 확률로 한 칸에 글자 부착
-    if(kw && Math.random() < 0.5){
+    // 키워드(현재 단어)가 있으면 절반 확률로 한 칸에 글자 부착
+    if(kwIdx>=0 && Math.random() < 0.5){
       const ch = pickLetter();
       if(ch){
         const cells=[];
@@ -813,6 +828,7 @@ function initPlayer(){
       if(p.mat[y][x]){ const gy=p.r+y, gx=p.c+x; if(gy>=0){ g.grid[gy][gx]=t;
         if(p.lc && p.lc.x===x && p.lc.y===y) g.letters[gy][gx]=p.lc.ch; } }
     }
+    g.down=false;          // 조각이 놓이면 소프트 드롭 해제 → 다음 조각은 정상 속도
     clearLines(g);
     spawn(g);
   }
@@ -860,7 +876,7 @@ function initPlayer(){
   /* ============== 루프 / 렌더 ============== */
   function beginGame(){
     state='playing'; G=newGame(); spawn(G);
-    resetCollection(); renderWordBar(false);   // 키워드 수집 초기화
+    resetAllCollection(); renderWordList();   // 키워드 수집 초기화(처음 단어부터)
     fit();   // 시작 시 보드 크기 보정
     document.getElementById('score').textContent=0;
     document.getElementById('lines').textContent=0;
@@ -873,7 +889,7 @@ function initPlayer(){
   function loop(t){
     if(state!=='playing'){ return; }
     const g=G; const dt=t-lastT; lastT=t; acc+=dt; sendAcc+=dt;
-    const iv = g.down ? 45 : dropInterval(g);
+    const iv = dropInterval(g);            // 중력은 항상 일정 (소프트 드롭은 버튼으로 따로 처리)
     while(acc>=iv){ softStep(g); acc-=iv; if(g.over) break; }
     if(g.over){ endGame(); return; }
     draw();
@@ -954,7 +970,7 @@ function initPlayer(){
 
   function endGame(){
     if(state!=='playing') return;
-    state='dead'; cancelAnimationFrame(raf);
+    state='dead'; cancelAnimationFrame(raf); stopSoft();
     sendState(); send({type:'topout', score:G.score, lines:G.lines});
     updateStats();
     const rankTxt = myRank ? ('현재 '+myRank+' / '+myTotal+'위') : '';
@@ -1061,29 +1077,44 @@ function initPlayer(){
   }
   function hideOverlay(){ document.getElementById('playOverlay').style.display='none'; }
 
+  /* ---- 소프트 드롭(부드럽게 한 칸씩) ---- */
+  const SOFT_MS = 80;            // 누르고 있을 때 한 칸 내려가는 간격(ms). 클수록 천천히 / 작을수록 빠르게
+  let softTimer = null;
+  function startSoft(){
+    if(!G || state!=='playing' || G.over) return;
+    if(softTimer) return;        // 이미 누르는 중이면 중복 방지
+    G.down = true; act('down');  // 즉시 한 칸
+    softTimer = setInterval(()=>{
+      if(state==='playing' && G && G.down && !G.over) act('down');
+      else stopSoft();
+    }, SOFT_MS);
+  }
+  function stopSoft(){ if(G) G.down=false; if(softTimer){ clearInterval(softTimer); softTimer=null; } }
+
   /* ---- 입력: 키보드 ---- */
   const KEY={ArrowLeft:'left',ArrowRight:'right',ArrowDown:'down',ArrowUp:'rotate',' ':'drop'};
   window.addEventListener('keydown', e=>{
     const k=KEY[e.key]; if(!k) return; e.preventDefault();
     if(state!=='playing'||!G) return;
-    if(k==='down'){ G.down=true; }
-    if(pressed.has(k) && (k==='rotate'||k==='drop')) return; // 회전/하드드롭은 연타 방지
+    if(k==='down'){ startSoft(); return; }                    // 소프트 드롭
+    if(pressed.has(k) && (k==='rotate'||k==='drop')) return;   // 회전/하드드롭은 연타 방지
     pressed.add(k);
     act(k);
   });
   window.addEventListener('keyup', e=>{
     const k=KEY[e.key]; if(!k) return; pressed.delete(k);
-    if(k==='down'&&G) G.down=false;
+    if(k==='down') stopSoft();
   });
 
   /* ---- 입력: 터치 버튼 ---- */
   document.querySelectorAll('#pad button').forEach(btn=>{
     const k=btn.dataset.k;
     const on=(e)=>{ e.preventDefault(); if(state!=='playing'||!G) return;
-      if(k==='down') G.down=true; act(k);
+      if(k==='down'){ startSoft(); return; }                  // 소프트 드롭(부드럽게)
+      act(k);
       if(k==='left'||k==='right'){ btn._rep=setInterval(()=>{ if(state==='playing'&&G) act(k); },110); }
     };
-    const off=(e)=>{ e.preventDefault(); if(k==='down'&&G) G.down=false; clearInterval(btn._rep); };
+    const off=(e)=>{ e.preventDefault(); if(k==='down') stopSoft(); clearInterval(btn._rep); };
     btn.addEventListener('touchstart',on,{passive:false});
     btn.addEventListener('touchend',off,{passive:false});
     btn.addEventListener('mousedown',on); btn.addEventListener('mouseup',off); btn.addEventListener('mouseleave',off);
@@ -1107,16 +1138,13 @@ function initPlayer(){
     const side = document.querySelector('.side');
     const sideW = side ? side.offsetWidth : 130;
     const wide = window.innerWidth >= 720;
-    // 키워드 수집 바가 보이면 그 높이만큼 보드 영역에서 뺀다
-    const wb = document.getElementById('wordBar');
-    const wbH = (wb && wb.style.display !== 'none' && kw) ? (wb.offsetHeight || 56) + 8 : 0;
     let availH, availW;
     if(wide){
-      availH = stage.clientHeight - 4 - wbH;
+      availH = stage.clientHeight - 4;
       availW = stage.clientWidth * 0.55 - sideW;   // 너비 여유를 넉넉히 → 보드가 세로를 꽉 채움
     } else {
       availW = stage.clientWidth - sideW - 14;
-      availH = (stage.clientHeight - 6) * 0.62 - wbH;
+      availH = (stage.clientHeight - 6) * 0.62;
     }
     if(availH <= 0 || availW <= 0) return;
     const cs = Math.max(8, Math.floor(Math.min(availH/ROWS, availW/COLS)));
