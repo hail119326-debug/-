@@ -200,6 +200,13 @@ function handleMessage(ws, raw) {
     case 'reset':
       if (ws.meta.role === 'host') resetGame();
       break;
+    case 'finish':           // 교사: 게임 강제 종료 (5초 카운트다운 후 결과)
+      if (ws.meta.role === 'host' && game.phase === 'playing' && !game.ending) {
+        game.ending = true;
+        broadcastAll({ type: 'endcountdown', sec: 5 });
+        setTimeout(() => { game.ending = false; finishGame(); }, 5000);
+      }
+      break;
     case 'autoassign':       // 교사: 팀 자동 배정 (m.teams = 사용할 팀 id 목록)
       if (ws.meta.role === 'host') autoAssign(Array.isArray(m.teams) ? m.teams : []);
       break;
@@ -229,12 +236,12 @@ function handleMessage(ws, raw) {
 }
 
 function startGame() {
-  game.phase = 'playing';
+  game.phase = 'playing'; game.ending = false;
   for (const p of players()) { p.meta.alive = true; p.meta.score = 0; p.meta.lines = 0; p.meta.board = null; }
   broadcastAll({ type: 'start' });
 }
 function resetGame() {
-  game.phase = 'lobby';
+  game.phase = 'lobby'; game.ending = false;
   for (const p of players()) { p.meta.alive = false; p.meta.score = 0; p.meta.lines = 0; p.meta.board = null; }
   broadcastAll({ type: 'reset' });
 }
@@ -318,22 +325,34 @@ setInterval(() => {
       const lastStanding = ps.length > 1 && alive.length === 1;
       if (lastStanding || alive.length === 0) ended = true;
     }
-    if (ended) {
-      game.phase = 'ended';
-      const result = rank.map(({ board, ...r }) => r).sort((a, b) => b.score - a.score); // 점수순 최종 순위
-      let winnerTeam = null, winnerTeams = [], winnerNames = [];
-      if (teamMode && teams[0]) {
-        const top = teams[0].avg;                                  // 평균 1위
-        winnerTeams = teams.filter(t => t.team && t.avg === top).map(t => t.team);
-        winnerTeam = winnerTeams[0];                               // 대표 1팀(하위호환)
-      } else if (!teamMode && result[0]) {
-        const top = result[0].score;                               // 점수 1위
-        winnerNames = result.filter(p => p.score === top).map(p => p.name);
-      }
-      broadcastAll({ type: 'gameover', players: result, teams, teamMode, winnerTeam, winnerTeams, winnerNames });
-    }
+    if (ended) finishGame(rank, teams, teamMode);
   }
 }, 300);
+
+// 게임 종료 결과 산출 + 브로드캐스트 (자연 종료/강제 종료 공용)
+function finishGame(rank, teams, teamMode) {
+  if (game.phase !== 'playing') return;
+  const ps = players();
+  if (!rank) {
+    teamMode = ps.some(p => p.meta.team);
+    rank = ps.map(p => ({
+      id: p.meta.id, name: p.meta.name, team: p.meta.team, score: p.meta.score, lines: p.meta.lines, alive: p.meta.alive, board: p.meta.board,
+    })).sort((a, b) => (b.alive - a.alive) || (b.score - a.score));
+    teams = teamSummary(ps);
+  }
+  game.phase = 'ended';
+  const result = rank.map(({ board, ...r }) => r).sort((a, b) => b.score - a.score); // 점수순 최종 순위
+  let winnerTeam = null, winnerTeams = [], winnerNames = [];
+  if (teamMode && teams[0]) {
+    const top = teams[0].avg;
+    winnerTeams = teams.filter(t => t.team && t.avg === top).map(t => t.team);
+    winnerTeam = winnerTeams[0];
+  } else if (!teamMode && result[0]) {
+    const top = result[0].score;
+    winnerNames = result.filter(p => p.score === top).map(p => p.name);
+  }
+  broadcastAll({ type: 'gameover', players: result, teams, teamMode, winnerTeam, winnerTeams, winnerNames });
+}
 
 /* ---------- 5) 시작 ---------- */
 server.listen(PORT, '0.0.0.0', () => {
