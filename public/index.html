@@ -65,6 +65,7 @@
   .rankRow .rkName{flex:1;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .rankRow .rkName.rkDead{color:var(--muted)}
   .rankRow .rkTeam{font-size:11px;font-weight:800}
+  .rankRow .rkStats{font-size:11px;color:var(--muted);font-weight:700;white-space:nowrap;margin-right:8px}
   .rankRow .rkScore{font-weight:900;font-variant-numeric:tabular-nums}
 
   /* 학생 최종 결과 모달 */
@@ -211,11 +212,24 @@
   .logRow b{color:var(--text)} .logRow .amt{margin-left:auto;color:#fb7185;font-weight:900}
   @keyframes logIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
   .hbtn.finish{background:linear-gradient(90deg,#fb923c,#ef4444);color:#fff}
-  /* 학생 하단 공격 기록(가로 한 줄) */
-  #atkLogBar{display:none;gap:6px;align-items:center;overflow:hidden;flex-wrap:nowrap;
-    padding:4px 8px;min-height:26px;white-space:nowrap}
-  #atkLogBar .logChip{flex:0 0 auto;font-size:12px;font-weight:800;border-radius:999px;padding:3px 9px;
-    border:1px solid transparent;animation:logIn .3s ease}
+  /* 줄 지움/콤보/테트리스 연출 */
+  .lineFx{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);
+    font-weight:900;font-size:26px;color:#6ee7ff;text-shadow:0 2px 14px rgba(0,0,0,.7);
+    pointer-events:none;opacity:0;z-index:7;white-space:nowrap}
+  .lineFx.show{animation:lineFx 1.1s ease}
+  .lineFx.combo{color:#fbbf24;font-size:30px}
+  .lineFx.tetris{color:#f472b6;font-size:34px}
+  #showResultBtn{margin-left:auto;background:linear-gradient(90deg,var(--accent2),var(--accent));color:#06121f;
+    font-weight:800;font-size:13px;border:none;border-radius:999px;padding:6px 14px;cursor:pointer}
+  @keyframes lineFx{0%{opacity:0;transform:translate(-50%,-30%) scale(.7)}
+    20%{opacity:1;transform:translate(-50%,-50%) scale(1.12)}
+    68%{opacity:1;transform:translate(-50%,-55%) scale(1)}
+    100%{opacity:0;transform:translate(-50%,-85%) scale(1)}}
+  /* 학생 하단 공격 기록(상하 스크롤, 기록 보존) */
+  #atkLogBar{display:none;flex-direction:column;gap:4px;overflow-y:auto;overflow-x:hidden;
+    max-height:84px;padding:5px 8px;margin:0 6px;background:var(--panel);border:1px solid var(--line);border-radius:10px}
+  #atkLogBar .logChip{flex:0 0 auto;font-size:12px;font-weight:800;border-radius:8px;padding:4px 9px;
+    border:1px solid transparent;animation:logIn .25s ease}
   #atkLogBar .logChip.hit{color:#fecaca;background:rgba(220,38,38,.22);border-color:#ef4444}
   #atkLogBar .logChip.send{color:#fed7aa;background:rgba(234,88,12,.22);border-color:#fb923c}
   .hbtn.assign{background:linear-gradient(90deg,var(--accent2),var(--accent))}
@@ -240,6 +254,7 @@
     <span class="me" id="meName">-</span>
     <span class="teamTag" id="meTeam"></span>
     <span class="rank" id="meRank"></span>
+    <button id="showResultBtn" class="hidden">📊 결과 보기</button>
   </div>
   <div class="stage">
     <div class="mainCol">
@@ -248,6 +263,7 @@
         <div id="kwToast" class="kwToast"></div>
         <div id="atkToast" class="atkToast"></div>
         <div id="bigCount" class="bigCount hidden"><span id="bigCountNum"></span></div>
+        <div id="lineFx" class="lineFx"></div>
         <div class="overlay" id="playOverlay">
           <h2 id="ovTitle">대기 중</h2>
           <div class="big hidden" id="ovBig"></div>
@@ -448,7 +464,8 @@ function buildRankList(plist, meId){
     const me = p.id===meId ? ' me' : '';
     const tag = info ? ` <span class="rkTeam" style="color:${info.color}">${esc(info.name)}</span>` : '';
     const dead = p.alive ? '' : ' rkDead';
-    return `<div class="rankRow${me}"><span class="rkPos">${pos}</span><span class="rkName${dead}">${esc(p.name)}${tag}</span><span class="rkScore">${p.score}</span></div>`;
+    const stats = `<span class="rkStats" title="공격 / 최대콤보 / 단어보너스">⚔️${p.atk||0} 🔥${p.combo||0} 📚${p.wbonus||0}</span>`;
+    return `<div class="rankRow${me}"><span class="rkPos">${pos}</span><span class="rkName${dead}">${esc(p.name)}${tag}</span>${stats}<span class="rkScore">${p.score}</span></div>`;
   }).join('') + '</div>';
 }
 
@@ -813,7 +830,7 @@ function initPlayer(){
     if(curComplete()){
       const word = kwList[kwIdx];
       kwDone[kwIdx] = true;
-      G.score += 500; updateStats(); sendState();    // 단어 완성 보너스
+      G.score += 500; G.wordBonus = (G.wordBonus||0) + 500; updateStats(); sendState();    // 단어 완성 보너스
       showKwToast('🎉 ‘'+esc(word)+'’ 완성! +500', true);
       pointToCurrent();                               // 다음 단어로
     } else {
@@ -858,10 +875,18 @@ function initPlayer(){
     const bar=document.getElementById('atkLogBar'); if(!bar) return;
     bar.style.display='flex';
     const chip=document.createElement('div'); chip.className='logChip '+kind; chip.textContent=text;
-    bar.prepend(chip);
-    while(bar.children.length>4) bar.removeChild(bar.lastChild);
+    bar.prepend(chip);                       // 최신이 위로
+    bar.scrollTop=0;                          // 새 기록 보이게 맨 위로
+    while(bar.children.length>50) bar.removeChild(bar.lastChild);  // 메모리 보호용 상한
   }
   function clearMyLog(){ const bar=document.getElementById('atkLogBar'); if(bar){ bar.innerHTML=''; bar.style.display='none'; } }
+  let lineFxTimer=null;
+  function showLineFx(text, kind){
+    const el=document.getElementById('lineFx'); if(!el) return;
+    el.textContent=text; el.className='lineFx '+kind+' show';
+    void el.offsetWidth; clearTimeout(lineFxTimer);
+    lineFxTimer=setTimeout(()=>{ el.className='lineFx '+kind; }, 1100);
+  }
   function renderWordList(){
     const list = document.getElementById('wordList');
     if(!list) return;
@@ -884,10 +909,14 @@ function initPlayer(){
     }).join('');
   }
 
+  function hideResultUI(){
+    document.getElementById('finalOverlay').classList.add('hidden');
+    document.getElementById('showResultBtn').classList.add('hidden');
+    lastFinal = null;
+  }
   function toWaiting(){
     state='waiting'; cancelAnimationFrame(raf); G=null;
-    clearBoard(); clearMyLog();
-    document.getElementById('finalOverlay').classList.add('hidden');
+    clearBoard(); clearMyLog(); hideResultUI();
     const t = TEAM_BY_ID[myTeam];
     setOverlay('대기 중','', t ? (t.name + ' 팀 · 선생님이 시작하면 시작돼요') : '선생님이 시작하면 자동으로 시작돼요');
   }
@@ -895,7 +924,7 @@ function initPlayer(){
   /* ---- 카운트다운 후 시작 ---- */
   function startCountdown(){
     if(state==='playing') return;
-    document.getElementById('finalOverlay').classList.add('hidden');
+    hideResultUI();
     let n=3;
     setOverlay('', String(n), '');
     const iv = setInterval(()=>{
@@ -922,7 +951,8 @@ function initPlayer(){
     return {
       grid: Array.from({length:ROWS},()=>Array(COLS).fill(0)),
       letters: Array.from({length:ROWS},()=>Array(COLS).fill(null)),   // 칸별 글자
-      cur:null, queue:[], bag:[], score:0, lines:0, level:1, down:false, over:false,
+      cur:null, queue:[], bag:[], score:0, lines:0, level:1, down:false, over:false, combo:-1,
+      atkSent:0, maxCombo:0, wordBonus:0,   // 통계: 보낸 공격줄, 최대 콤보, 단어 보너스
     };
   }
   function bagNext(g){
@@ -992,11 +1022,21 @@ function initPlayer(){
       }
     }
     if(cleared>0){
-      const pts=[0,100,300,500,800][cleared]*g.level;
-      g.score+=pts; g.lines+=cleared;
+      g.combo++;                               // 연속 줄 지우기 → 콤보 증가
+      const base=[0,100,300,500,800][cleared]*g.level;
+      const comboBonus = g.combo>0 ? g.combo*50*g.level : 0;   // 콤보 보너스 점수
+      g.score += base + comboBonus; g.lines+=cleared;
       g.level=Math.floor(g.lines/10)+1;
-      const atk=[0,0,1,2,4][cleared];          // 보낼 방해 줄 수
+      const atk=[0,0,1,2,4][cleared] + (g.combo>0 ? Math.min(g.combo,4) : 0);  // 기본 공격 + 콤보 추가 공격(최대 +4)
       if(atk>0) send({type:'attack', amount:atk});
+      g.atkSent += atk;                          // 통계: 보낸 공격줄 누적
+      if(g.combo > g.maxCombo) g.maxCombo = g.combo;  // 통계: 최대 콤보
+      // 화면 연출
+      if(cleared===4) showLineFx('TETRIS! +'+(base+comboBonus), 'tetris');
+      else if(g.combo>0) showLineFx(g.combo+' COMBO! +'+(base+comboBonus), 'combo');
+      else if(cleared>=2) showLineFx('+'+base, 'line');
+    } else {
+      g.combo=-1;                              // 줄 못 지움 → 콤보 끊김
     }
   }
   function addGarbage(n){
@@ -1056,7 +1096,7 @@ function initPlayer(){
     }
     return out;
   }
-  function sendState(){ send({type:'state', score:G.score, lines:G.lines, board:encodeBoard(snapshot())}); }
+  function sendState(){ send({type:'state', score:G.score, lines:G.lines, atk:G.atkSent, combo:G.maxCombo, wbonus:G.wordBonus, board:encodeBoard(snapshot())}); }
   function updateStats(){
     document.getElementById('score').textContent=G.score;
     document.getElementById('lines').textContent=G.lines;
@@ -1121,35 +1161,43 @@ function initPlayer(){
   function endGame(){
     if(state!=='playing') return;
     state='dead'; cancelAnimationFrame(raf); stopSoft();
-    sendState(); send({type:'topout', score:G.score, lines:G.lines});
+    sendState(); send({type:'topout', score:G.score, lines:G.lines, atk:G.atkSent, combo:G.maxCombo, wbonus:G.wordBonus});
     updateStats();
     const rankTxt = myRank ? ('현재 '+myRank+' / '+myTotal+'위') : '';
     setOverlay('게임 오버','', '내 점수 '+G.score+'점 · '+rankTxt);
   }
+  let lastFinal=null;   // 마지막 게임 결과 (다시 보기용)
   function onGameOver(m){
+    lastFinal = m;
+    cancelAnimationFrame(raf); if(state==='playing') state='dead';
     const rank = m.players || [];
     const me = rank.find(p=>p.id===myId);
     const pos = me ? (rank.indexOf(me)+1) : '-';
-    cancelAnimationFrame(raf); if(state==='playing') state='dead';
     const wi = winnerInfo(m);
-    // 내가 우승(또는 공동 우승)했는지
     let iWon = false;
     if(m.teamMode){ const ws=(m.winnerTeams&&m.winnerTeams.length)?m.winnerTeams:(m.winnerTeam?[m.winnerTeam]:[]); iWon = me && ws.includes(me.team); }
     else { const ns=(m.winnerNames&&m.winnerNames.length)?m.winnerNames:[]; iWon = me && ns.includes(me.name); }
     setOverlay(iWon ? ('🏆 '+wi.text) : wi.text, '', me ? ('내 순위 '+pos+'위 · '+me.score+'점') : '');
-    showFinal(m, me, pos);
+    openFinal();
+    document.getElementById('showResultBtn').classList.remove('hidden');  // 결과 다시 보기 버튼
   }
-  function showFinal(m, me, pos){
+  function openFinal(){
+    const m = lastFinal; if(!m) return;
+    const rank = m.players || [];
+    const me = rank.find(p=>p.id===myId);
+    const pos = me ? (rank.indexOf(me)+1) : '-';
     const t = document.getElementById('finalTitle');
     const wi = winnerInfo(m);
     t.textContent = wi.text; t.style.color = wi.color || '';
     document.getElementById('finalTeams').innerHTML = buildTeamStandings(m.teams);
-    let meLine = me ? ('내 순위 ' + pos + ' / ' + (m.players?m.players.length:'-') + '위 · ' + me.score + '점') : '';
+    let meLine = me ? ('내 순위 ' + pos + ' / ' + rank.length + '위 · ' + me.score + '점') : '';
     if(m.teamMode && me){ const ti=TEAM_BY_ID[me.team]; if(ti) meLine += ' · ' + ti.name + ' 팀'; }
     document.getElementById('finalMe').textContent = meLine;
     document.getElementById('finalList').innerHTML = buildRankList(m.players, myId);
     document.getElementById('finalOverlay').classList.remove('hidden');
   }
+  function closeFinal(){ document.getElementById('finalOverlay').classList.add('hidden'); }
+  document.getElementById('showResultBtn').onclick = openFinal;
 
   /* ---- 상대방 화면 그리드 (나 제외, 전부 / 팀 색으로 구분) ---- */
   const oppCards = new Map(); // id -> {el, canvas, nm}
