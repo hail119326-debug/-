@@ -158,7 +158,7 @@ class WSConn extends EventEmitter {
 
 /* ---------- 3) 게임 로직 (한 학급 = 방 하나) ---------- */
 let nextId = 1;
-const game = { phase: 'lobby', activeTeams: [], keyword: '' }; // keyword: 교사가 등록한 학습 키워드
+const game = { phase: 'lobby', activeTeams: [], keywords: [] }; // keywords: 교사가 등록한 학습 키워드 목록(최대 20)
 
 const players = () => [...clients].filter(c => c.meta.role === 'player');
 const hosts = () => [...clients].filter(c => c.meta.role === 'host');
@@ -177,7 +177,7 @@ function handleMessage(ws, raw) {
         // 팀을 안 들고 들어왔는데 교사가 팀을 운영 중이면 → 인원이 가장 적은 팀에 자동 배치
         if (!ws.meta.team && game.activeTeams.length) ws.meta.team = smallestActiveTeam(ws);
         if (ws.meta.team) notifyTeam(ws);
-        if (game.keyword) ws.send(JSON.stringify({ type: 'keyword', word: game.keyword }));
+        if (game.keywords.length) ws.send(JSON.stringify({ type: 'keywords', words: game.keywords }));
         // 게임 도중 들어오면 바로 참가
         if (game.phase === 'playing') {
           ws.meta.alive = true;
@@ -215,10 +215,14 @@ function handleMessage(ws, raw) {
         for (const p of players()) { p.meta.team = ''; notifyTeam(p); }
       }
       break;
-    case 'setkeyword':       // 교사: 학습 키워드 등록(빈 문자열이면 해제)
+    case 'setkeyword':       // 교사: 학습 키워드 목록 등록(빈 목록이면 해제)
       if (ws.meta.role === 'host') {
-        game.keyword = (m.word || '').toString().replace(/\s+/g, '').slice(0, 12);
-        broadcastAll({ type: 'keyword', word: game.keyword });
+        let raw = Array.isArray(m.words) ? m.words : String(m.word || '').split(/[\n,]/);
+        game.keywords = raw
+          .map(w => String(w).replace(/\s+/g, '').slice(0, 12))   // 공백 제거 + 단어당 12자
+          .filter(w => w.length > 0)
+          .slice(0, 20);                                          // 최대 20개
+        broadcastAll({ type: 'keywords', words: game.keywords });
       }
       break;
   }
