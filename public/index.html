@@ -67,6 +67,20 @@
   .rankRow .rkTeam{font-size:11px;font-weight:800}
   .rankRow .rkStats{font-size:11px;color:var(--muted);font-weight:700;white-space:nowrap;margin-right:8px}
   .rankRow .rkScore{font-weight:900;font-variant-numeric:tabular-nums}
+  /* 최종 순위 표 */
+  .rankWrap{width:min(660px,94vw);max-height:52vh;overflow:auto;border-radius:10px;border:1px solid var(--line)}
+  .rankTable{width:100%;border-collapse:collapse;font-size:13px}
+  .rankTable th{position:sticky;top:0;background:var(--panel2);color:var(--muted);font-size:11px;font-weight:800;
+    padding:8px 8px;text-align:center;white-space:nowrap;border-bottom:1px solid var(--line)}
+  .rankTable th:nth-child(2){text-align:left}
+  .rankTable td{padding:8px 8px;text-align:center;background:var(--panel);border-bottom:1px solid rgba(255,255,255,.05);
+    font-variant-numeric:tabular-nums;color:var(--muted);white-space:nowrap}
+  .rankTable td.cPos{font-weight:900;color:var(--text);width:42px}
+  .rankTable td.cName{text-align:left;font-weight:700;color:var(--text)}
+  .rankTable td.cName.rkDead{color:var(--muted)}
+  .rankTable td.cScore{font-weight:900;color:var(--text);font-size:15px}
+  .rankTable .rkRow.me td{background:rgba(110,231,255,.16)}
+  .rankTable .rkTeam{font-size:11px;font-weight:800}
 
   /* 학생 최종 결과 모달 */
   #finalOverlay{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;
@@ -466,15 +480,21 @@ function buildTeamStandings(teams){
 // 개인 순위 리스트 HTML (점수 같으면 공동 등수, 내 행 강조)
 function buildRankList(plist, meId){
   let pos=0, prev=null;
-  return '<div class="rankRows">' + (plist||[]).map((p,i)=>{
-    if(p.score !== prev){ pos=i+1; prev=p.score; }       // 점수 같으면 공동 등수
+  const rows = (plist||[]).map((p,i)=>{
+    if(p.score!==prev){ pos=i+1; prev=p.score; }          // 점수 같으면 공동 등수
     const info = TEAM_BY_ID[p.team];
     const me = p.id===meId ? ' me' : '';
-    const tag = info ? ` <span class="rkTeam" style="color:${info.color}">${esc(info.name)}</span>` : '';
     const dead = p.alive ? '' : ' rkDead';
-    const stats = `<span class="rkStats">⚔️공격 ${p.atk||0} · 🔥최대콤보 ${p.combo||0} · 💥콤보보너스 ${p.cbonus||0} · 📚단어보너스 ${p.wbonus||0}</span>`;
-    return `<div class="rankRow${me}"><span class="rkPos">${pos}</span><span class="rkName${dead}">${esc(p.name)}${tag}</span>${stats}<span class="rkScore">${p.score}</span></div>`;
-  }).join('') + '</div>';
+    const team = info ? ` <span class="rkTeam" style="color:${info.color}">${esc(info.name)}</span>` : '';
+    return `<tr class="rkRow${me}">`
+      + `<td class="cPos">${pos}</td>`
+      + `<td class="cName${dead}">${esc(p.name)}${team}</td>`
+      + `<td>${p.atk||0}</td><td>${p.combo||0}</td><td>${p.cbonus||0}</td><td>${p.wbonus||0}</td>`
+      + `<td class="cScore">${p.score}</td></tr>`;
+  }).join('');
+  return `<div class="rankWrap"><table class="rankTable">`
+    + `<thead><tr><th>순위</th><th>닉네임</th><th>공격</th><th>최대콤보</th><th>콤보보너스</th><th>단어보너스</th><th>점수</th></tr></thead>`
+    + `<tbody>${rows}</tbody></table></div>`;
 }
 
 // 20x10 보드(문자열 또는 2D배열)를 캔버스에 그리기 (상황판/상대화면 공용)
@@ -1364,6 +1384,8 @@ function initPlayer(){
     boardCS = cs;
     board.style.width  = (cs*COLS) + 'px';
     board.style.height = (cs*ROWS) + 'px';
+    const bc = board.closest('.boardCol');
+    if(bc) bc.style.width = (cs*COLS) + 'px';   // 보드 칸 폭 = 보드 폭 (공격 로그가 옆 패널을 안 가림)
     layoutOpp(lastOppCount);   // 보드 크기 바뀌면 상대 화면 상한도 갱신
   }
   window.addEventListener('resize', ()=>{ fit(); });
