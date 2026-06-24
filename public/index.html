@@ -323,27 +323,47 @@ function encodeBoard(grid){ let s=''; for(let y=0;y<ROWS;y++){ const r=grid[y]; 
 function decodeBoard(s){ const g=[]; for(let y=0;y<ROWS;y++){ const row=[]; for(let x=0;x<COLS;x++){ const v=s.charCodeAt(y*COLS+x)-48; row.push(v>=0&&v<=8?v:0); } g.push(row); } return g; }
 function toGrid(b){ return (typeof b==='string') ? decodeBoard(b) : b; }
 
-// 팀 순위표 HTML (평균/합산/생존 표시). 팀이 2팀 이상일 때만.
+// 우승 발표 문구 (동점이면 공동 우승). {text, color, tie}
+function winnerInfo(m){
+  if(m.teamMode){
+    const ws = (m.winnerTeams && m.winnerTeams.length) ? m.winnerTeams : (m.winnerTeam ? [m.winnerTeam] : []);
+    const names = ws.map(id => (TEAM_BY_ID[id] ? TEAM_BY_ID[id].name : id));
+    if(ws.length > 1) return { text: names.join('·') + ' 팀 공동 우승! 🏆', color:null, tie:true };
+    if(ws.length === 1) return { text: names[0] + ' 팀 우승! 🏆', color:(TEAM_BY_ID[ws[0]]||{}).color||null, tie:false };
+    return { text:'게임 종료', color:null, tie:false };
+  } else {
+    const ns = (m.winnerNames && m.winnerNames.length) ? m.winnerNames : (m.players && m.players[0] ? [m.players[0].name] : []);
+    if(ns.length > 1) return { text: ns.join('·') + ' 공동 우승! 🏆', color:null, tie:true };
+    if(ns.length === 1) return { text: ns[0] + ' 우승! 🏆', color:null, tie:false };
+    return { text:'게임 종료', color:null, tie:false };
+  }
+}
+
+// 팀 순위표 HTML (평균/합산/생존, 동점이면 공동 등수)
 function buildTeamStandings(teams){
   const real = (teams||[]).filter(t=>t.team);
   if(real.length < 2) return '';
+  let pos=0, prev=null;
   return '<div class="standTeams">' + real.map((t,i)=>{
+    if(t.avg !== prev){ pos=i+1; prev=t.avg; }           // 평균 같으면 공동 등수
     const info = TEAM_BY_ID[t.team] || {name:t.team, color:'#8b95b5'};
     return `<div class="stTeam" style="--tc:${info.color}">
-      <span class="stPos">${i+1}</span>
+      <span class="stPos">${pos}</span>
       <span class="stName">${esc(info.name)} 팀</span>
       <span class="stNums">평균 <b>${t.avg}</b> · 합산 ${t.score} · 생존 ${t.alive}/${t.players}</span>
     </div>`;
   }).join('') + '</div>';
 }
-// 개인 순위 리스트 HTML (내 행은 강조)
+// 개인 순위 리스트 HTML (점수 같으면 공동 등수, 내 행 강조)
 function buildRankList(plist, meId){
+  let pos=0, prev=null;
   return '<div class="rankRows">' + (plist||[]).map((p,i)=>{
+    if(p.score !== prev){ pos=i+1; prev=p.score; }       // 점수 같으면 공동 등수
     const info = TEAM_BY_ID[p.team];
     const me = p.id===meId ? ' me' : '';
     const tag = info ? ` <span class="rkTeam" style="color:${info.color}">${esc(info.name)}</span>` : '';
     const dead = p.alive ? '' : ' rkDead';
-    return `<div class="rankRow${me}"><span class="rkPos">${i+1}</span><span class="rkName${dead}">${esc(p.name)}${tag}</span><span class="rkScore">${p.score}</span></div>`;
+    return `<div class="rankRow${me}"><span class="rkPos">${pos}</span><span class="rkName${dead}">${esc(p.name)}${tag}</span><span class="rkScore">${p.score}</span></div>`;
   }).join('') + '</div>';
 }
 
@@ -531,19 +551,22 @@ function initHost(){
   function showWinner(m){
     const nameEl = document.getElementById('winName');
     const subEl = document.getElementById('winSub');
-    if(m.teamMode && m.winnerTeam){
-      const info = TEAM_BY_ID[m.winnerTeam] || {name:m.winnerTeam, color:'#fbbf24'};
-      const tm = (m.teams||[]).find(t=>t.team===m.winnerTeam);
+    const wi = winnerInfo(m);
+    nameEl.textContent = wi.text;
+    if(wi.color){   // 단독 팀 우승 → 팀 색
       nameEl.style.background='none'; nameEl.style.webkitBackgroundClip='border-box';
-      nameEl.style.backgroundClip='border-box'; nameEl.style.color=info.color;
-      nameEl.textContent = info.name + ' 팀 우승! 🏆';
-      subEl.textContent = tm ? ('평균 ' + tm.avg + '점 · 합산 ' + tm.score + '점 · 생존 ' + tm.alive + '/' + tm.players) : '';
-    } else {
+      nameEl.style.backgroundClip='border-box'; nameEl.style.color=wi.color;
+    } else {        // 개인전/공동 우승 → 기본 그라데이션
       nameEl.style.background=''; nameEl.style.webkitBackgroundClip='';
       nameEl.style.backgroundClip=''; nameEl.style.color='';
+    }
+    if(m.teamMode){
+      const ws = (m.winnerTeams && m.winnerTeams.length) ? m.winnerTeams : (m.winnerTeam?[m.winnerTeam]:[]);
+      const tm = (m.teams||[]).find(t=>t.team===ws[0]);
+      subEl.textContent = tm ? ('평균 ' + tm.avg + '점' + (wi.tie ? ' 공동 1위' : (' · 합산 ' + tm.score + ' · 생존 ' + tm.alive + '/' + tm.players))) : '';
+    } else {
       const w = m.players && m.players[0];
-      nameEl.textContent = w ? (w.name + ' 우승!') : '게임 종료';
-      subEl.textContent = w ? (w.score + '점 · ' + w.lines + '줄') : '';
+      subEl.textContent = w ? (w.score + '점' + (wi.tie ? ' 공동 1위' : '')) : '';
     }
     document.getElementById('hostFinalTeams').innerHTML = buildTeamStandings(m.teams);
     document.getElementById('hostFinalList').innerHTML = buildRankList(m.players, null);
@@ -582,6 +605,9 @@ function initPlayer(){
     const tag = document.getElementById('meTeam'), t = TEAM_BY_ID[myTeam];
     if(t){ tag.textContent = t.name + ' 팀'; tag.style.color = t.color; tag.style.borderColor = t.color; }
     else { tag.textContent = ''; }
+    // 내 보드 테두리도 팀 색으로 (내가 무슨 팀인지 바로 보이게)
+    if(t){ board.style.borderColor = t.color; board.style.borderWidth = '4px'; board.style.boxShadow = '0 0 0 1px '+t.color; }
+    else { board.style.borderColor = ''; board.style.borderWidth = ''; board.style.boxShadow = ''; }
     if(state==='waiting'){
       setOverlay('대기 중','', t ? (t.name + ' 팀 · 선생님이 시작하면 시작돼요') : '선생님이 팀을 정하면 표시돼요');
     }
@@ -828,28 +854,18 @@ function initPlayer(){
     const me = rank.find(p=>p.id===myId);
     const pos = me ? (rank.indexOf(me)+1) : '-';
     cancelAnimationFrame(raf); if(state==='playing') state='dead';
-
-    // 작은 오버레이엔 요약, 자세한 건 최종 결과 모달로
-    let title;
-    if(m.teamMode && m.winnerTeam){
-      const info = TEAM_BY_ID[m.winnerTeam] || {name:m.winnerTeam};
-      title = (me && me.team===m.winnerTeam) ? ('🏆 '+info.name+' 팀 우승!') : (info.name+' 팀 우승');
-    } else {
-      const win = rank[0];
-      title = (me && win && me.id===win.id) ? '🏆 우승!' : '게임 종료';
-    }
-    setOverlay(title, '', me ? ('내 순위 '+pos+'위 · '+me.score+'점') : '');
+    const wi = winnerInfo(m);
+    // 내가 우승(또는 공동 우승)했는지
+    let iWon = false;
+    if(m.teamMode){ const ws=(m.winnerTeams&&m.winnerTeams.length)?m.winnerTeams:(m.winnerTeam?[m.winnerTeam]:[]); iWon = me && ws.includes(me.team); }
+    else { const ns=(m.winnerNames&&m.winnerNames.length)?m.winnerNames:[]; iWon = me && ns.includes(me.name); }
+    setOverlay(iWon ? ('🏆 '+wi.text) : wi.text, '', me ? ('내 순위 '+pos+'위 · '+me.score+'점') : '');
     showFinal(m, me, pos);
   }
   function showFinal(m, me, pos){
     const t = document.getElementById('finalTitle');
-    if(m.teamMode && m.winnerTeam){
-      const info = TEAM_BY_ID[m.winnerTeam] || {name:m.winnerTeam, color:'#fbbf24'};
-      t.textContent = info.name + ' 팀 우승! 🏆'; t.style.color = info.color;
-    } else {
-      const w = m.players && m.players[0];
-      t.textContent = w ? (w.name + ' 우승! 🏆') : '게임 종료'; t.style.color = '';
-    }
+    const wi = winnerInfo(m);
+    t.textContent = wi.text; t.style.color = wi.color || '';
     document.getElementById('finalTeams').innerHTML = buildTeamStandings(m.teams);
     let meLine = me ? ('내 순위 ' + pos + ' / ' + (m.players?m.players.length:'-') + '위 · ' + me.score + '점') : '';
     if(m.teamMode && me){ const ti=TEAM_BY_ID[me.team]; if(ti) meLine += ' · ' + ti.name + ' 팀'; }
