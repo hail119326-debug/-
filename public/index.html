@@ -131,7 +131,17 @@
   .lrow.dead{opacity:.45}
   #grid{flex:1;overflow:auto;display:grid;gap:12px;align-content:start;
     grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
-  .pcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:8px;display:flex;flex-direction:column;gap:6px;align-items:center}
+  .pcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:8px;display:flex;flex-direction:column;gap:6px;align-items:center;position:relative}
+  .pcard.fxHit{animation:fxHit .7s ease}
+  .pcard.fxSend{animation:fxSend .7s ease}
+  @keyframes fxHit{0%,100%{box-shadow:none;border-color:var(--line)}
+    20%{box-shadow:0 0 0 3px #ef4444,0 0 18px #ef4444;border-color:#ef4444}}
+  @keyframes fxSend{0%,100%{box-shadow:none;border-color:var(--line)}
+    20%{box-shadow:0 0 0 3px #fb923c,0 0 14px #fb923c;border-color:#fb923c}}
+  .pcard .fxBadge{position:absolute;top:6px;right:8px;background:#ef4444;color:#fff;font-weight:900;
+    font-size:14px;padding:2px 8px;border-radius:999px;z-index:3;animation:fxBadge .8s ease forwards}
+  @keyframes fxBadge{0%{opacity:0;transform:translateY(6px) scale(.8)}
+    20%{opacity:1;transform:translateY(0) scale(1)}80%{opacity:1}100%{opacity:0;transform:translateY(-10px)}}
   .pcard.dead{opacity:.4;filter:grayscale(.6)}
   .pcard canvas{background:#070a14;border-radius:8px;width:100%}
   .pcard .pn{font-weight:800;font-size:13px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -160,13 +170,33 @@
   /* 학생 사이드 키워드 목록 */
   #wordCard #wordList{display:flex;flex-direction:column;gap:5px;max-height:34vh;overflow:auto}
   .wordItem{display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:8px;background:var(--panel2);
-    border:1px solid var(--line);font-weight:800;font-size:14px;letter-spacing:1px;
-    filter:grayscale(1) brightness(.75);transition:filter .3s, background .3s, border-color .3s}
-  .wordItem.cur{border-color:var(--accent);filter:grayscale(.55) brightness(.9)}
-  .wordItem.done{filter:none;background:rgba(52,211,153,.18);border-color:var(--good)}
+    border:1px solid var(--line);font-weight:800;font-size:14px;letter-spacing:1px;transition:background .3s,border-color .3s}
+  .wordItem.cur{border-color:var(--accent);background:rgba(110,231,255,.10)}
+  .wordItem.done{background:rgba(52,211,153,.18);border-color:var(--good)}
+  .wordItem .ch{color:var(--muted);opacity:.5;transition:color .25s,opacity .25s}
+  .wordItem .ch.got{color:var(--good);opacity:1}
+  .wordItem.done .ch{color:var(--good);opacity:1}
   .wordItem .wi-ico{font-size:13px}
   .wordItem .wi-prog{margin-left:auto;font-size:11px;color:var(--muted);font-weight:700}
   .wordItem.done .wi-prog{color:var(--good)}
+  /* 수집 순간 연출(보드 위에 잠깐 떴다 사라짐) */
+  .kwToast{position:absolute;top:12%;left:50%;transform:translateX(-50%);
+    background:rgba(7,10,20,.85);border:1px solid var(--line);border-radius:12px;
+    padding:7px 14px;font-weight:900;font-size:18px;color:var(--good);
+    pointer-events:none;opacity:0;z-index:6;white-space:nowrap}
+  .kwToast.show{animation:kwpop .8s ease}
+  .kwToast.big{font-size:23px;color:#fbbf24}
+  .kwToast.big.show{animation:kwpop 1.4s ease}
+  @keyframes kwpop{0%{opacity:0;transform:translateX(-50%) translateY(10px) scale(.9)}
+    18%{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}
+    72%{opacity:1}100%{opacity:0;transform:translateX(-50%) translateY(-8px)}}
+  /* 공격 알림(맞음=빨강 위 / 때림=주황 아래) */
+  .atkToast{position:absolute;left:50%;transform:translateX(-50%);bottom:14%;
+    border-radius:10px;padding:6px 12px;font-weight:900;font-size:15px;
+    pointer-events:none;opacity:0;z-index:6;white-space:nowrap;border:1px solid transparent}
+  .atkToast.hit{top:32%;bottom:auto;color:#fecaca;background:rgba(220,38,38,.22);border-color:#ef4444}
+  .atkToast.send{color:#fed7aa;background:rgba(234,88,12,.22);border-color:#fb923c}
+  .atkToast.show{animation:kwpop 1s ease}
   .hbtn.assign{background:linear-gradient(90deg,var(--accent2),var(--accent))}
   .pcard{cursor:pointer}
   .pcard .pt{font-size:11px;font-weight:800;padding:2px 10px;border-radius:999px;background:var(--panel2);color:var(--muted)}
@@ -194,6 +224,8 @@
     <div class="mainCol">
       <div class="boardWrap">
         <canvas id="board" width="200" height="400"></canvas>
+        <div id="kwToast" class="kwToast"></div>
+        <div id="atkToast" class="atkToast"></div>
         <div class="overlay" id="playOverlay">
           <h2 id="ovTitle">대기 중</h2>
           <div class="big hidden" id="ovBig"></div>
@@ -505,7 +537,18 @@ function initHost(){
       document.getElementById('kwNow').textContent = n ? ('등록됨: '+m.words.join(', ')) : '등록된 키워드 없음';
       return;
     }
+    if(m.type==='attackfx'){ flashAttack(m.fromId, m.toId, m.amount); return; }
   };
+
+  function flashAttack(fromId, toId, amount){
+    const v = cards.get(toId), a = cards.get(fromId);
+    if(v){ v.el.classList.remove('fxHit'); void v.el.offsetWidth; v.el.classList.add('fxHit');
+      setTimeout(()=>v.el.classList.remove('fxHit'), 700);
+      if(amount){ const b=document.createElement('div'); b.className='fxBadge'; b.textContent='+'+amount;
+        v.el.appendChild(b); setTimeout(()=>b.remove(), 800); } }
+    if(a){ a.el.classList.remove('fxSend'); void a.el.offsetWidth; a.el.classList.add('fxSend');
+      setTimeout(()=>a.el.classList.remove('fxSend'), 700); }
+  }
 
   function renderHost(m){
     document.getElementById('hCount').textContent = m.count;
@@ -674,7 +717,8 @@ function initPlayer(){
     if(m.type==='start'){ startCountdown(); return; }
     if(m.type==='reset'){ toWaiting(); return; }
     if(m.type==='team'){ setMyTeam(m.team); return; }
-    if(m.type==='garbage'){ if(G && state==='playing') addGarbage(m.amount); return; }
+    if(m.type==='garbage'){ if(G && state==='playing'){ addGarbage(m.amount); showAtkToast('🛡️ '+esc(m.from||'상대')+' 공격! +'+m.amount+'줄', 'hit'); } return; }
+    if(m.type==='attacked'){ showAtkToast('⚔️ '+esc(m.to||'상대')+'에게 +'+m.amount+'줄!', 'send'); return; }
     if(m.type==='gameover'){ onGameOver(m); return; }
     if(m.type==='world'){ onWorld(m); return; }
     if(m.type==='keywords'){ setKeywords(m.words); return; }
@@ -708,11 +752,33 @@ function initPlayer(){
     if(kwIdx<0 || curReq[ch]==null) return;          // 현재 단어 글자가 아니면 무시
     if((curHave[ch]||0) < curReq[ch]) curHave[ch]++;
     if(curComplete()){
+      const word = kwList[kwIdx];
       kwDone[kwIdx] = true;
       G.score += 500; updateStats(); sendState();    // 단어 완성 보너스
+      showKwToast('🎉 ‘'+esc(word)+'’ 완성! +500', true);
       pointToCurrent();                               // 다음 단어로
+    } else {
+      showKwToast('✏️ ‘'+esc(ch)+'’ 획득', false);
     }
     renderWordList();
+  }
+  let kwToastTimer=null;
+  function showKwToast(html, big){
+    const el=document.getElementById('kwToast'); if(!el) return;
+    el.innerHTML=html;
+    el.className='kwToast show'+(big?' big':'');
+    void el.offsetWidth;                 // 리플로우 → 애니메이션 재시작
+    clearTimeout(kwToastTimer);
+    kwToastTimer=setTimeout(()=>{ el.className='kwToast'; }, big?1400:800);
+  }
+  let atkToastTimer=null;
+  function showAtkToast(html, kind){     // kind: 'hit'(맞음) | 'send'(때림)
+    const el=document.getElementById('atkToast'); if(!el) return;
+    el.innerHTML=html;
+    el.className='atkToast '+kind+' show';
+    void el.offsetWidth;
+    clearTimeout(atkToastTimer);
+    atkToastTimer=setTimeout(()=>{ el.className='atkToast '+kind; }, 1000);
   }
   function renderWordList(){
     const list = document.getElementById('wordList');
@@ -722,16 +788,17 @@ function initPlayer(){
     if(prog) prog.textContent = kwList.length ? (doneCnt+'/'+kwList.length) : '';
     list.innerHTML = kwList.map((w,i)=>{
       const done = kwDone[i], cur = (i===kwIdx);
-      let ico = done ? '✅' : (cur ? '✏️' : '🔒');
-      let sub = '';
-      if(cur && !done){
-        // 현재 단어: 모은 글자 수 표시
-        let have=0, need=0; const seen={};
-        for(const ch of w){ need++; seen[ch]=(seen[ch]||0)+1; if((curHave[ch]||0)>=seen[ch]) have++; }
-        sub = '<span class="wi-prog">'+have+'/'+need+'</span>';
-      }
+      const ico = done ? '✅' : (cur ? '✏️' : '🔒');
+      const seen = {}; let have = 0; const chars = [...w];
+      const html = chars.map(ch=>{
+        seen[ch]=(seen[ch]||0)+1;
+        let got = done ? true : (cur ? (curHave[ch]||0) >= seen[ch] : false);
+        if(got && cur && !done) have++;
+        return '<span class="ch'+(got?' got':'')+'">'+esc(ch)+'</span>';
+      }).join('');
+      let sub = (cur && !done) ? ('<span class="wi-prog">'+have+'/'+chars.length+'</span>') : '';
       const cls = 'wordItem' + (done?' done':'') + (cur?' cur':'');
-      return '<div class="'+cls+'"><span class="wi-ico">'+ico+'</span><span>'+esc(w)+'</span>'+sub+'</div>';
+      return '<div class="'+cls+'"><span class="wi-ico">'+ico+'</span><span class="wi-word">'+html+'</span>'+sub+'</div>';
     }).join('');
   }
 
