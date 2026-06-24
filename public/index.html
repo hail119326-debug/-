@@ -321,6 +321,7 @@
     <button class="hbtn start" id="hStart">▶ 시작</button>
     <button class="hbtn finish" id="hFinish">⏱ 게임 종료</button>
     <button class="hbtn reset" id="hReset">🔄 리셋</button>
+    <button class="hbtn assign hidden" id="hShowResult">📊 결과 보기</button>
   </div>
   <div class="teamCtl">
     <span class="pill">팀 수
@@ -548,11 +549,12 @@ function initHost(){
   }
   loadQrLib(()=>{});   // 미리 불러두기
 
-  document.getElementById('hStart').onclick = ()=>{ send({type:'start'}); document.getElementById('hostOverlay').classList.add('hidden'); };
+  document.getElementById('hStart').onclick = ()=>{ send({type:'start'}); document.getElementById('hostOverlay').classList.add('hidden'); document.getElementById('hShowResult').classList.add('hidden'); };
+  document.getElementById('hShowResult').onclick = ()=> document.getElementById('hostOverlay').classList.remove('hidden');
   document.getElementById('hFinish').onclick = ()=>{
     if(confirm('게임을 종료할까요? 5초 카운트다운 후 결과가 나옵니다.')) send({type:'finish'});
   };
-  document.getElementById('hReset').onclick = ()=>{ send({type:'reset'}); document.getElementById('hostOverlay').classList.add('hidden'); hostHideCount(); document.getElementById('atkLog').innerHTML=''; };
+  document.getElementById('hReset').onclick = ()=>{ send({type:'reset'}); document.getElementById('hostOverlay').classList.add('hidden'); document.getElementById('hShowResult').classList.add('hidden'); hostHideCount(); document.getElementById('atkLog').innerHTML=''; };
 
   /* ---- 팀 컨트롤 (교사 권한) ---- */
   const teamSel = document.getElementById('hTeamCount');
@@ -728,6 +730,7 @@ function initHost(){
     document.getElementById('hostFinalTeams').innerHTML = buildTeamStandings(m.teams);
     document.getElementById('hostFinalList').innerHTML = buildRankList(m.players, null);
     document.getElementById('hostOverlay').classList.remove('hidden');
+    document.getElementById('hShowResult').classList.remove('hidden');   // 결과 다시 보기 버튼
   }
 
   connect(()=> send({type:'join', role:'host', name:'HOST'}));
