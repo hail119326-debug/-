@@ -246,7 +246,10 @@ function sendGarbage(from, amount) {
     : players().filter(p => p !== from && p.meta.alive);
   if (!targets.length) return;
   const t = targets[(Math.random() * targets.length) | 0];
-  t.send(JSON.stringify({ type: 'garbage', amount }));
+  t.send(JSON.stringify({ type: 'garbage', amount, from: from.meta.name }));      // 받는 사람: 누구한테 맞았는지
+  from.send(JSON.stringify({ type: 'attacked', amount, to: t.meta.name }));        // 보낸 사람: 누구를 때렸는지
+  const fx = JSON.stringify({ type: 'attackfx', fromId: from.meta.id, toId: t.meta.id, amount }); // 교사 상황판용
+  for (const h of hosts()) h.send(fx);
 }
 function broadcastAll(obj) {
   const s = JSON.stringify(obj);
