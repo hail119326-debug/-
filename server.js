@@ -274,7 +274,10 @@ function teamSummary(ps) {
     e.score += p.meta.score; e.lines += p.meta.lines; e.players++;
     if (p.meta.alive) e.alive++;
   }
-  return [...map.values()].sort((a, b) => b.score - a.score);
+  const arr = [...map.values()];
+  arr.forEach(e => e.avg = e.players ? Math.round(e.score / e.players) : 0);  // 평균 점수
+  arr.sort((a, b) => (b.avg - a.avg) || (b.score - a.score));                 // 등수: 평균 우선
+  return arr;
 }
 
 setInterval(() => {
