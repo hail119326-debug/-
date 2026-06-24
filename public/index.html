@@ -155,6 +155,16 @@
   .tcard .tbarfill > span{display:block;height:100%;background:var(--tc);border-radius:999px;transition:width .3s}
   .teamCtl{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
   .teamCtl select{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:3px 8px;font-size:15px;font-weight:800;margin-left:6px}
+  .teamCtl input{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:15px;font-weight:700;width:130px}
+  .teamCtl input:focus{outline:none;border-color:var(--accent)}
+  /* 학생 키워드 수집 바 */
+  .boardCol{display:flex;flex-direction:column;gap:8px;min-height:0}
+  .wordBar{display:none;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px;
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 10px}
+  .wordBar .kwLabel{font-size:11px;color:var(--muted);font-weight:800;margin-right:4px}
+  .wordSlot{width:30px;height:34px;border-radius:7px;border:2px dashed var(--line);display:flex;align-items:center;justify-content:center;
+    font-size:18px;font-weight:900;color:var(--muted)}
+  .wordSlot.got{border-style:solid;border-color:var(--good);background:rgba(52,211,153,.16);color:var(--text)}
   .hbtn.assign{background:linear-gradient(90deg,var(--accent2),var(--accent))}
   .pcard{cursor:pointer}
   .pcard .pt{font-size:11px;font-weight:800;padding:2px 10px;border-radius:999px;background:var(--panel2);color:var(--muted)}
@@ -180,13 +190,16 @@
   </div>
   <div class="stage">
     <div class="mainCol">
-      <div class="boardWrap">
-        <canvas id="board" width="200" height="400"></canvas>
-        <div class="overlay" id="playOverlay">
-          <h2 id="ovTitle">대기 중</h2>
-          <div class="big hidden" id="ovBig"></div>
-          <div class="sub" id="ovSub">선생님이 시작하면 자동으로 시작돼요</div>
+      <div class="boardCol">
+        <div class="boardWrap">
+          <canvas id="board" width="200" height="400"></canvas>
+          <div class="overlay" id="playOverlay">
+            <h2 id="ovTitle">대기 중</h2>
+            <div class="big hidden" id="ovBig"></div>
+            <div class="sub" id="ovSub">선생님이 시작하면 자동으로 시작돼요</div>
+          </div>
         </div>
+        <div id="wordBar" class="wordBar"></div>
       </div>
       <div class="side">
         <div class="card">
@@ -244,6 +257,13 @@
     <button class="hbtn assign" id="hAssign">🎲 팀 자동 배정</button>
     <button class="hbtn reset" id="hClear">팀 해제</button>
     <span class="pill" style="color:var(--muted)">학생 카드를 누르면 팀이 바뀌어요</span>
+  </div>
+  <div class="teamCtl">
+    <span class="pill">📚 학습 키워드</span>
+    <input id="hKeyword" maxlength="12" placeholder="예: 광합성" />
+    <button class="hbtn assign" id="hSetKw">키워드 등록</button>
+    <button class="hbtn reset" id="hClearKw">키워드 지우기</button>
+    <span class="pill" id="kwNow" style="color:var(--muted)">등록된 키워드 없음</span>
   </div>
   <div class="joinUrls" id="joinUrls"><span class="pill">학생 접속 주소 불러오는 중…</span></div>
   <div id="teamBar"></div>
@@ -456,6 +476,13 @@ function initHost(){
   const activeTeamIds = ()=> TEAM_PALETTE.slice(0, teamCount).map(t=>t.id);
   document.getElementById('hAssign').onclick = ()=> send({type:'autoassign', teams: activeTeamIds()});
   document.getElementById('hClear').onclick  = ()=> send({type:'clearteams'});
+
+  // 학습 키워드 등록/지우기
+  const kwInput = document.getElementById('hKeyword');
+  function setKw(){ const w=kwInput.value.trim(); send({type:'setkeyword', word:w}); }
+  document.getElementById('hSetKw').onclick = setKw;
+  kwInput.addEventListener('keydown', e=>{ if(e.key==='Enter') setKw(); });
+  document.getElementById('hClearKw').onclick = ()=>{ kwInput.value=''; send({type:'setkeyword', word:''}); };
   function cycleTeam(id, cur){
     const a = activeTeamIds(); const i = a.indexOf(cur);
     send({type:'assign', id, team: a[(i+1) % a.length]});  // 다음 팀으로 변경(미배정이면 첫 팀)
@@ -466,6 +493,10 @@ function initHost(){
     if(m.type==='welcome'){ myId=m.id; return; }
     if(m.type==='world'){ renderHost(m); return; }
     if(m.type==='gameover'){ showWinner(m); return; }
+    if(m.type==='keyword'){
+      document.getElementById('kwNow').textContent = m.word ? ('현재 키워드: '+m.word) : '등록된 키워드 없음';
+      return;
+    }
   };
 
   function renderHost(m){
@@ -638,7 +669,56 @@ function initPlayer(){
     if(m.type==='garbage'){ if(G && state==='playing') addGarbage(m.amount); return; }
     if(m.type==='gameover'){ onGameOver(m); return; }
     if(m.type==='world'){ onWorld(m); return; }
+    if(m.type==='keyword'){ setKeyword(m.word); return; }
   };
+
+  /* ===== 학습 키워드 수집 ===== */
+  let kw = '';            // 현재 키워드 (예: "광합성")
+  let kwReq = {};         // 글자별 필요 개수
+  let kwHave = {};        // 글자별 모은 개수
+  function setKeyword(word){
+    kw = (word||'').toString();
+    kwReq = {}; for(const ch of kw){ kwReq[ch]=(kwReq[ch]||0)+1; }
+    resetCollection();
+    renderWordBar(false);
+    fit();                // 수집 바가 생기면 보드 높이 재계산
+  }
+  function resetCollection(){ kwHave = {}; for(const ch in kwReq) kwHave[ch]=0; }
+  function wordComplete(){ for(const ch in kwReq){ if((kwHave[ch]||0) < kwReq[ch]) return false; } return kw.length>0; }
+  // 다음 조각에 붙일 글자 (아직 다 못 모은 글자 중 랜덤). 없으면 null
+  function pickLetter(){
+    if(!kw) return null;
+    const need = Object.keys(kwReq).filter(ch => (kwHave[ch]||0) < kwReq[ch]);
+    if(!need.length) return null;
+    return need[(Math.random()*need.length)|0];
+  }
+  function collectLetter(ch){
+    if(kwReq[ch]==null) return;
+    if((kwHave[ch]||0) < kwReq[ch]) kwHave[ch]++;
+    if(wordComplete()){
+      G.score += 500;                 // 단어 완성 보너스
+      updateStats(); sendState();
+      flashWord();
+      setTimeout(()=>{ resetCollection(); renderWordBar(false); }, 1200);  // 다시 모으기 가능
+    }
+    renderWordBar(false);
+  }
+  function renderWordBar(done){
+    const bar = document.getElementById('wordBar');
+    if(!kw){ bar.style.display='none'; bar.innerHTML=''; return; }
+    bar.style.display='flex';
+    // 각 글자 슬롯 채움 여부 (같은 글자는 왼쪽부터 채움)
+    const seen = {};
+    let html = '<span class="kwLabel">키워드</span>';
+    for(const ch of kw){
+      seen[ch]=(seen[ch]||0)+1;
+      const got = (kwHave[ch]||0) >= seen[ch];
+      html += `<span class="wordSlot${got?' got':''}">${got?esc(ch):'?'}</span>`;
+    }
+    if(done) html += '<span class="kwLabel" style="color:var(--good)">완성! +500</span>';
+    bar.innerHTML = html;
+  }
+  function flashWord(){ renderWordBar(true); }
 
   function toWaiting(){
     state='waiting'; cancelAnimationFrame(raf); G=null;
@@ -677,6 +757,7 @@ function initPlayer(){
   function newGame(){
     return {
       grid: Array.from({length:ROWS},()=>Array(COLS).fill(0)),
+      letters: Array.from({length:ROWS},()=>Array(COLS).fill(null)),   // 칸별 글자
       cur:null, queue:[], bag:[], score:0, lines:0, level:1, down:false, over:false,
     };
   }
@@ -690,7 +771,17 @@ function initPlayer(){
     const type = g.queue.shift();
     ensureQueue(g);
     const mat = SHAPES[type].map(r=>r.slice());
-    const piece = { type, mat, r:0, c:((COLS - mat[0].length)>>1) };
+    const piece = { type, mat, r:0, c:((COLS - mat[0].length)>>1), lc:null };
+    // 키워드가 있으면 절반 확률로 한 칸에 글자 부착
+    if(kw && Math.random() < 0.5){
+      const ch = pickLetter();
+      if(ch){
+        const cells=[];
+        for(let y=0;y<mat.length;y++) for(let x=0;x<mat[y].length;x++) if(mat[y][x]) cells.push({x,y});
+        const cell = cells[(Math.random()*cells.length)|0];
+        piece.lc = { x:cell.x, y:cell.y, ch };
+      }
+    }
     if(collide(g, piece)){ g.over=true; return; }
     g.cur = piece;
   }
@@ -710,15 +801,17 @@ function initPlayer(){
     return out;
   }
   function tryRotate(g){
-    const p=g.cur, old=p.mat;
+    const p=g.cur, old=p.mat, oldLc=p.lc, n=p.mat.length;
     p.mat = rotateCW(p.mat);
+    if(p.lc) p.lc = { x:n-1-p.lc.y, y:p.lc.x, ch:p.lc.ch };   // 글자 칸도 같이 회전
     for(const dx of [0,-1,1,-2,2]){ p.c+=dx; if(!collide(g,p)) return; p.c-=dx; }
-    p.mat = old; // 실패 시 원복
+    p.mat = old; p.lc = oldLc; // 실패 시 원복
   }
   function lock(g){
     const p=g.cur, t=TI[p.type];
     for(let y=0;y<p.mat.length;y++) for(let x=0;x<p.mat[y].length;x++){
-      if(p.mat[y][x]){ const gy=p.r+y, gx=p.c+x; if(gy>=0) g.grid[gy][gx]=t; }
+      if(p.mat[y][x]){ const gy=p.r+y, gx=p.c+x; if(gy>=0){ g.grid[gy][gx]=t;
+        if(p.lc && p.lc.x===x && p.lc.y===y) g.letters[gy][gx]=p.lc.ch; } }
     }
     clearLines(g);
     spawn(g);
@@ -726,7 +819,12 @@ function initPlayer(){
   function clearLines(g){
     let cleared=0;
     for(let y=ROWS-1;y>=0;y--){
-      if(g.grid[y].every(v=>v!==0)){ g.grid.splice(y,1); g.grid.unshift(Array(COLS).fill(0)); cleared++; y++; }
+      if(g.grid[y].every(v=>v!==0)){
+        for(let x=0;x<COLS;x++){ const ch=g.letters[y][x]; if(ch) collectLetter(ch); }  // 글자 수집
+        g.grid.splice(y,1); g.grid.unshift(Array(COLS).fill(0));
+        g.letters.splice(y,1); g.letters.unshift(Array(COLS).fill(null));
+        cleared++; y++;
+      }
     }
     if(cleared>0){
       const pts=[0,100,300,500,800][cleared]*g.level;
@@ -741,10 +839,10 @@ function initPlayer(){
     // 위쪽 n줄에 블록이 있으면 밀려서 탈락
     for(let y=0;y<n;y++) if(g.grid[y].some(v=>v!==0)){ g.over=true; }
     for(let i=0;i<n;i++){
-      g.grid.shift();
+      g.grid.shift(); g.letters.shift();
       const row=Array(COLS).fill(8);
       row[(Math.random()*COLS)|0]=0;          // 구멍 하나
-      g.grid.push(row);
+      g.grid.push(row); g.letters.push(Array(COLS).fill(null));
     }
     if(g.cur){ while(collide(g,g.cur)){ g.cur.r--; if(g.cur.r<-3){ g.over=true; break; } } }
     if(g.over) endGame();
@@ -762,6 +860,7 @@ function initPlayer(){
   /* ============== 루프 / 렌더 ============== */
   function beginGame(){
     state='playing'; G=newGame(); spawn(G);
+    resetCollection(); renderWordBar(false);   // 키워드 수집 초기화
     fit();   // 시작 시 보드 크기 보정
     document.getElementById('score').textContent=0;
     document.getElementById('lines').textContent=0;
@@ -808,6 +907,8 @@ function initPlayer(){
     for(let y=1;y<ROWS;y++){ bctx.beginPath();bctx.moveTo(0,y*CS);bctx.lineTo(board.width,y*CS);bctx.stroke(); }
     // 쌓인 블록
     for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++) drawCell(bctx,x,y,g.grid[y][x],CS);
+    // 쌓인 블록 위의 글자
+    for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++) if(g.letters[y][x]) drawGlyph(x,y,g.letters[y][x]);
     // 고스트 + 현재 조각
     if(g.cur){
       const ghost={...g.cur,r:g.cur.r}; while(!collide(g,{...ghost,r:ghost.r+1})) ghost.r++;
@@ -817,8 +918,18 @@ function initPlayer(){
       bctx.globalAlpha=1;
       for(let y=0;y<g.cur.mat.length;y++) for(let x=0;x<g.cur.mat[y].length;x++)
         if(g.cur.mat[y][x]) drawCell(bctx,g.cur.c+x,g.cur.r+y,TI[g.cur.type],CS);
+      // 현재 조각의 글자
+      if(g.cur.lc){ const gx=g.cur.c+g.cur.lc.x, gy=g.cur.r+g.cur.lc.y; if(gy>=0) drawGlyph(gx,gy,g.cur.lc.ch); }
     }
     drawNext();
+  }
+  function drawGlyph(x,y,ch){
+    bctx.fillStyle='rgba(0,0,0,.85)';
+    bctx.font = '900 ' + Math.floor(CS*0.72) + 'px sans-serif';
+    bctx.textAlign='center'; bctx.textBaseline='middle';
+    bctx.fillText(ch, x*CS+CS/2, y*CS+CS/2+1);
+    bctx.fillStyle='rgba(255,255,255,.95)';
+    bctx.fillText(ch, x*CS+CS/2, y*CS+CS/2);
   }
   function drawNext(){
     nctx.clearRect(0,0,nextCv.width,nextCv.height);
@@ -996,13 +1107,16 @@ function initPlayer(){
     const side = document.querySelector('.side');
     const sideW = side ? side.offsetWidth : 130;
     const wide = window.innerWidth >= 720;
+    // 키워드 수집 바가 보이면 그 높이만큼 보드 영역에서 뺀다
+    const wb = document.getElementById('wordBar');
+    const wbH = (wb && wb.style.display !== 'none' && kw) ? (wb.offsetHeight || 56) + 8 : 0;
     let availH, availW;
     if(wide){
-      availH = stage.clientHeight - 4;
+      availH = stage.clientHeight - 4 - wbH;
       availW = stage.clientWidth * 0.55 - sideW;   // 너비 여유를 넉넉히 → 보드가 세로를 꽉 채움
     } else {
       availW = stage.clientWidth - sideW - 14;
-      availH = (stage.clientHeight - 6) * 0.62;
+      availH = (stage.clientHeight - 6) * 0.62 - wbH;
     }
     if(availH <= 0 || availW <= 0) return;
     const cs = Math.max(8, Math.floor(Math.min(availH/ROWS, availW/COLS)));
