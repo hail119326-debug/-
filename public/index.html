@@ -47,8 +47,32 @@
   #oppGrid{flex:1;overflow:auto;display:grid;gap:6px;align-content:start;justify-content:center}   /* 칸 크기는 JS가 인원수에 맞춰 계산 */
   .opp{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0}
   .opp canvas{width:100%;display:block;height:calc(var(--bw,50px) * 2);background:#070a14;border-radius:4px;border:2px solid var(--line)}
-  .opp .on{font-size:9px;font-weight:700;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .opp .on{font-size:12px;font-weight:800;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .opp .ot{display:inline-block;font-size:10px;font-weight:800;line-height:1.3;padding:1px 7px;border-radius:999px}
   .opp.dead{opacity:.4}
+
+  /* 순위 공용 */
+  .standTeams{display:flex;flex-direction:column;gap:8px;width:min(560px,92vw)}
+  .stTeam{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);
+    border-left:5px solid var(--tc);border-radius:12px;padding:10px 12px}
+  .stTeam .stPos{font-weight:900;color:var(--tc);width:22px;text-align:center}
+  .stTeam .stName{font-weight:800;color:var(--tc);min-width:84px}
+  .stTeam .stNums{font-size:13px;color:var(--muted)} .stTeam .stNums b{color:var(--text);font-size:16px}
+  .rankRows{display:flex;flex-direction:column;gap:4px;width:min(560px,92vw);max-height:48vh;overflow:auto}
+  .rankRow{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;background:var(--panel)}
+  .rankRow.me{background:linear-gradient(90deg,rgba(110,231,255,.22),transparent);border:1px solid var(--accent)}
+  .rankRow .rkPos{width:26px;text-align:center;font-weight:900;color:var(--muted)}
+  .rankRow .rkName{flex:1;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rankRow .rkName.rkDead{color:var(--muted)}
+  .rankRow .rkTeam{font-size:11px;font-weight:800}
+  .rankRow .rkScore{font-weight:900;font-variant-numeric:tabular-nums}
+
+  /* 학생 최종 결과 모달 */
+  #finalOverlay{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;
+    background:rgba(7,10,20,.94);backdrop-filter:blur(4px);padding:20px}
+  .finalCard{display:flex;flex-direction:column;align-items:center;gap:12px;max-height:94vh;overflow:auto;text-align:center}
+  .finalCard h2{margin:0;font-size:clamp(24px,5vw,38px)}
+  .finalMe{font-size:18px;font-weight:800;color:var(--accent)}
   @media (max-width:720px){
     .stage{flex-direction:column}
     .mainCol{order:1}     /* 모바일에선 내 보드를 위로 */
@@ -113,8 +137,8 @@
   .pcard .pn{font-weight:800;font-size:13px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .pcard .ps{font-size:12px;color:var(--accent);font-weight:800;font-variant-numeric:tabular-nums}
   #hostOverlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;
-    background:rgba(7,10,20,.9);backdrop-filter:blur(4px);z-index:20;text-align:center}
-  #hostOverlay .crown{font-size:64px}
+    background:rgba(7,10,20,.9);backdrop-filter:blur(4px);z-index:20;text-align:center;overflow:auto;padding:24px}
+  #hostOverlay .crown{font-size:56px}
   #hostOverlay .win{font-size:clamp(40px,8vw,80px);font-weight:900;
     background:linear-gradient(90deg,#fbbf24,#f472b6);-webkit-background-clip:text;background-clip:text;color:transparent}
   .empty{color:var(--muted);text-align:center;margin-top:40px;grid-column:1/-1}
@@ -190,6 +214,16 @@
   </div>
 </div>
 
+<div id="finalOverlay" class="hidden">
+  <div class="finalCard">
+    <h2 id="finalTitle">최종 결과</h2>
+    <div id="finalTeams"></div>
+    <div id="finalMe" class="finalMe"></div>
+    <div id="finalList"></div>
+    <button class="btn" onclick="document.getElementById('finalOverlay').classList.add('hidden')">닫기</button>
+  </div>
+</div>
+
 <!-- ================= 상황판(교사) ================= -->
 <div id="hostScreen" class="hidden">
   <div class="hostHead">
@@ -217,6 +251,14 @@
     <div id="leaderboard"><h2>순위</h2><div id="lbList"></div></div>
     <div id="grid"><div class="empty">학생들이 접속하면 여기에 보드가 나타납니다.</div></div>
   </div>
+</div>
+<div id="hostOverlay" class="hidden">
+  <div class="crown">👑</div>
+  <div class="win" id="winName">우승!</div>
+  <div class="pill" id="winSub"></div>
+  <div id="hostFinalTeams"></div>
+  <div id="hostFinalList"></div>
+  <button class="hbtn reset" style="margin-top:12px" onclick="document.getElementById('hostOverlay').classList.add('hidden')">닫기</button>
 </div>
 <div id="qrOverlay" class="hidden" onclick="if(event.target===this)this.classList.add('hidden')">
   <div class="qrCard">
@@ -280,6 +322,30 @@ function drawCell(ctx, x, y, cell, cs){
 function encodeBoard(grid){ let s=''; for(let y=0;y<ROWS;y++){ const r=grid[y]; for(let x=0;x<COLS;x++) s += (r[x]||0); } return s; }
 function decodeBoard(s){ const g=[]; for(let y=0;y<ROWS;y++){ const row=[]; for(let x=0;x<COLS;x++){ const v=s.charCodeAt(y*COLS+x)-48; row.push(v>=0&&v<=8?v:0); } g.push(row); } return g; }
 function toGrid(b){ return (typeof b==='string') ? decodeBoard(b) : b; }
+
+// 팀 순위표 HTML (평균/합산/생존 표시). 팀이 2팀 이상일 때만.
+function buildTeamStandings(teams){
+  const real = (teams||[]).filter(t=>t.team);
+  if(real.length < 2) return '';
+  return '<div class="standTeams">' + real.map((t,i)=>{
+    const info = TEAM_BY_ID[t.team] || {name:t.team, color:'#8b95b5'};
+    return `<div class="stTeam" style="--tc:${info.color}">
+      <span class="stPos">${i+1}</span>
+      <span class="stName">${esc(info.name)} 팀</span>
+      <span class="stNums">평균 <b>${t.avg}</b> · 합산 ${t.score} · 생존 ${t.alive}/${t.players}</span>
+    </div>`;
+  }).join('') + '</div>';
+}
+// 개인 순위 리스트 HTML (내 행은 강조)
+function buildRankList(plist, meId){
+  return '<div class="rankRows">' + (plist||[]).map((p,i)=>{
+    const info = TEAM_BY_ID[p.team];
+    const me = p.id===meId ? ' me' : '';
+    const tag = info ? ` <span class="rkTeam" style="color:${info.color}">${esc(info.name)}</span>` : '';
+    const dead = p.alive ? '' : ' rkDead';
+    return `<div class="rankRow${me}"><span class="rkPos">${i+1}</span><span class="rkName${dead}">${esc(p.name)}${tag}</span><span class="rkScore">${p.score}</span></div>`;
+  }).join('') + '</div>';
+}
 
 // 20x10 보드(문자열 또는 2D배열)를 캔버스에 그리기 (상황판/상대화면 공용)
 function renderBoard(canvas, board){
@@ -468,11 +534,10 @@ function initHost(){
     if(m.teamMode && m.winnerTeam){
       const info = TEAM_BY_ID[m.winnerTeam] || {name:m.winnerTeam, color:'#fbbf24'};
       const tm = (m.teams||[]).find(t=>t.team===m.winnerTeam);
-      // 그라데이션 글자를 팀 색 단색으로 바꿔서 표시
       nameEl.style.background='none'; nameEl.style.webkitBackgroundClip='border-box';
       nameEl.style.backgroundClip='border-box'; nameEl.style.color=info.color;
       nameEl.textContent = info.name + ' 팀 우승! 🏆';
-      subEl.textContent = tm ? (tm.score + '점 · 생존 ' + tm.alive + '명') : '';
+      subEl.textContent = tm ? ('평균 ' + tm.avg + '점 · 합산 ' + tm.score + '점 · 생존 ' + tm.alive + '/' + tm.players) : '';
     } else {
       nameEl.style.background=''; nameEl.style.webkitBackgroundClip='';
       nameEl.style.backgroundClip=''; nameEl.style.color='';
@@ -480,6 +545,8 @@ function initHost(){
       nameEl.textContent = w ? (w.name + ' 우승!') : '게임 종료';
       subEl.textContent = w ? (w.score + '점 · ' + w.lines + '줄') : '';
     }
+    document.getElementById('hostFinalTeams').innerHTML = buildTeamStandings(m.teams);
+    document.getElementById('hostFinalList').innerHTML = buildRankList(m.players, null);
     document.getElementById('hostOverlay').classList.remove('hidden');
   }
 
@@ -502,6 +569,7 @@ function initPlayer(){
   let state = 'name'; // name | waiting | playing | dead
   let G = null;       // 게임 상태
   let raf=0, lastT=0, acc=0, sendAcc=0;
+  let myRank=0, myTotal=0;   // 최근 순위 (죽었을 때 표시용)
   const pressed = new Set();
 
   // 캔버스 셀 크기
@@ -549,6 +617,7 @@ function initPlayer(){
   function toWaiting(){
     state='waiting'; cancelAnimationFrame(raf); G=null;
     clearBoard();
+    document.getElementById('finalOverlay').classList.add('hidden');
     const t = TEAM_BY_ID[myTeam];
     setOverlay('대기 중','', t ? (t.name + ' 팀 · 선생님이 시작하면 시작돼요') : '선생님이 시작하면 자동으로 시작돼요');
   }
@@ -556,6 +625,7 @@ function initPlayer(){
   /* ---- 카운트다운 후 시작 ---- */
   function startCountdown(){
     if(state==='playing') return;
+    document.getElementById('finalOverlay').classList.add('hidden');
     let n=3;
     setOverlay('', String(n), '');
     const iv = setInterval(()=>{
@@ -750,24 +820,42 @@ function initPlayer(){
     state='dead'; cancelAnimationFrame(raf);
     sendState(); send({type:'topout', score:G.score, lines:G.lines});
     updateStats();
-    setOverlay('게임 오버','', '결과를 기다리는 중…');
+    const rankTxt = myRank ? ('현재 '+myRank+' / '+myTotal+'위') : '';
+    setOverlay('게임 오버','', '내 점수 '+G.score+'점 · '+rankTxt);
   }
   function onGameOver(m){
     const rank = m.players || [];
     const me = rank.find(p=>p.id===myId);
     const pos = me ? (rank.indexOf(me)+1) : '-';
     cancelAnimationFrame(raf); if(state==='playing') state='dead';
+
+    // 작은 오버레이엔 요약, 자세한 건 최종 결과 모달로
+    let title;
     if(m.teamMode && m.winnerTeam){
       const info = TEAM_BY_ID[m.winnerTeam] || {name:m.winnerTeam};
-      const iWon = me && me.team===m.winnerTeam;
-      setOverlay(iWon ? ('🏆 '+info.name+' 팀 우승!') : (info.name+' 팀 우승'),
-        '', me ? ('내 순위 '+pos+'위 · '+me.score+'점') : '');
+      title = (me && me.team===m.winnerTeam) ? ('🏆 '+info.name+' 팀 우승!') : (info.name+' 팀 우승');
     } else {
       const win = rank[0];
-      const mine = (me && win && me.id===win.id);
-      setOverlay(mine?'🏆 우승!':'게임 종료',
-        '', (win?('1위: '+win.name+' ('+win.score+'점)'):'') + (me?(' · 내 순위 '+pos+'위'):''));
+      title = (me && win && me.id===win.id) ? '🏆 우승!' : '게임 종료';
     }
+    setOverlay(title, '', me ? ('내 순위 '+pos+'위 · '+me.score+'점') : '');
+    showFinal(m, me, pos);
+  }
+  function showFinal(m, me, pos){
+    const t = document.getElementById('finalTitle');
+    if(m.teamMode && m.winnerTeam){
+      const info = TEAM_BY_ID[m.winnerTeam] || {name:m.winnerTeam, color:'#fbbf24'};
+      t.textContent = info.name + ' 팀 우승! 🏆'; t.style.color = info.color;
+    } else {
+      const w = m.players && m.players[0];
+      t.textContent = w ? (w.name + ' 우승! 🏆') : '게임 종료'; t.style.color = '';
+    }
+    document.getElementById('finalTeams').innerHTML = buildTeamStandings(m.teams);
+    let meLine = me ? ('내 순위 ' + pos + ' / ' + (m.players?m.players.length:'-') + '위 · ' + me.score + '점') : '';
+    if(m.teamMode && me){ const ti=TEAM_BY_ID[me.team]; if(ti) meLine += ' · ' + ti.name + ' 팀'; }
+    document.getElementById('finalMe').textContent = meLine;
+    document.getElementById('finalList').innerHTML = buildRankList(m.players, myId);
+    document.getElementById('finalOverlay').classList.remove('hidden');
   }
 
   /* ---- 상대방 화면 그리드 (나 제외, 전부 / 팀 색으로 구분) ---- */
@@ -775,6 +863,7 @@ function initPlayer(){
   function onWorld(m){
     // 내 순위
     const meIdx = m.players.findIndex(p=>p.id===myId);
+    myRank = meIdx>=0 ? meIdx+1 : 0; myTotal = m.players.length;
     document.getElementById('meRank').textContent = meIdx>=0 ? ((meIdx+1)+' / '+m.players.length+'위') : '';
 
     const others = m.players.filter(p=>p.id!==myId);
@@ -794,28 +883,33 @@ function initPlayer(){
         const el = document.createElement('div'); el.className='opp';
         const cv = document.createElement('canvas'); cv.width=50; cv.height=100;
         const nm = document.createElement('div'); nm.className='on';
-        el.append(cv,nm); grid.appendChild(el);
-        c = {el, canvas:cv, nm}; oppCards.set(p.id, c);
+        const ot = document.createElement('div'); ot.className='ot';   // 팀 표시
+        el.append(cv,nm,ot); grid.appendChild(el);
+        c = {el, canvas:cv, nm, ot}; oppCards.set(p.id, c);
       }
       c.el.className = 'opp' + (p.alive?'':' dead');
       const ti = TEAM_BY_ID[p.team];
-      c.canvas.style.borderColor = ti ? ti.color : 'var(--line)';  // 팀 색 테두리
+      c.canvas.style.borderColor = ti ? ti.color : 'var(--line)';
+      c.canvas.style.borderWidth = ti ? '3px' : '2px';
       c.nm.textContent = p.name;
       c.nm.style.color = ti ? ti.color : 'var(--text)';
+      if(ti){ c.ot.textContent = ti.name; c.ot.style.background = ti.color; c.ot.style.color='#0b0e1a'; c.ot.style.display=''; }
+      else { c.ot.style.display='none'; }
       renderBoard(c.canvas, p.board);
       grid.appendChild(c.el); // 순위 순서 반영
     });
     lastOppCount = others.length;
+    oppHasTeam = others.some(p=>TEAM_BY_ID[p.team]);
     layoutOpp(others.length);   // 인원수에 맞춰 칸 크기 자동 조절
   }
 
   // 상대 화면 칸 크기를 인원수+영역크기에 맞춰 계산 (스크롤 없이 다 들어가게)
-  let lastOppCount = 0;
+  let lastOppCount = 0, oppHasTeam = false;
   function layoutOpp(n){
     const grid = document.getElementById('oppGrid');
     const W = grid.clientWidth, H = grid.clientHeight;
     if(n<=0 || W<=0 || H<=0) return;
-    const gap=6, labelH=13, ar=2;        // 보드 높이 = 너비 * 2, 이름표 약 13px
+    const gap=6, labelH=(oppHasTeam?30:15), ar=2;   // 이름(+팀이름표) 높이 반영
     let best=0, bestCols=1;
     for(let cols=1; cols<=n; cols++){
       const rows=Math.ceil(n/cols);
