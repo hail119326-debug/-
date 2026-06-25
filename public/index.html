@@ -36,12 +36,12 @@
   .topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:4px 8px}
   .topbar .me{font-weight:800;font-size:16px}
   .topbar .rank{color:var(--accent);font-weight:800}
-  .stage{flex:1;display:flex;gap:10px;min-height:0}
+  .stage{flex:1;display:flex;gap:12px;min-height:0;justify-content:center}
   .mainCol{display:flex;gap:10px;min-height:0;flex:0 0 auto;justify-content:center;order:2}   /* 내 보드: 오른쪽 */
   .boardWrap{position:relative;display:flex;align-items:center}
   #board{background:#070a14;border:1px solid var(--line);border-radius:10px;height:100%;max-height:100%;touch-action:none}
-  .side{display:flex;flex-direction:column;gap:10px;width:140px;min-width:120px}
-  .oppWrap{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;order:1;             /* 상대 화면: 왼쪽 */
+  .side{display:flex;flex-direction:column;gap:10px;flex:0 0 132px;width:132px}
+  .oppWrap{flex:1 1 0;min-width:0;max-width:420px;min-height:0;display:flex;flex-direction:column;order:1;   /* 상대 화면: 왼쪽(폭 제한) */
     background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px}
   .oppTitle{margin:0 0 6px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
   #oppGrid{flex:1;overflow:auto;display:grid;gap:6px;align-content:start;justify-content:center}   /* 칸 크기는 JS가 인원수에 맞춰 계산 */
@@ -89,10 +89,10 @@
   .finalCard h2{margin:0;font-size:clamp(24px,5vw,38px)}
   .finalMe{font-size:18px;font-weight:800;color:var(--accent)}
   @media (max-width:720px){
-    .stage{flex-direction:column}
+    .stage{flex-direction:column;justify-content:flex-start}
     .mainCol{order:1}     /* 모바일에선 내 보드를 위로 */
-    .oppWrap{order:2;flex:1 1 auto;max-height:38vh}
-    .side{width:120px;min-width:108px}
+    .oppWrap{order:2;flex:1 1 auto;max-width:none;max-height:34vh}
+    .side{flex:0 0 120px;width:120px}
   }
   .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px}
   .card h3{margin:0 0 6px;font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase}
@@ -100,10 +100,10 @@
   .stat{display:flex;justify-content:space-between;align-items:baseline;font-size:14px;margin:8px 2px;color:var(--muted)}
   .stat b{font-size:26px;font-weight:900;color:var(--text);font-variant-numeric:tabular-nums;line-height:1}
 
-  /* 터치 컨트롤 */
-  #pad{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;padding:4px}
-  #pad button{height:58px;border-radius:14px;border:1px solid var(--line);background:var(--panel2);color:var(--text);
-    font-size:22px;font-weight:800;display:flex;align-items:center;justify-content:center}
+  /* 터치 컨트롤 (작게 → 게임 화면 공간 확보) */
+  #pad{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;padding:2px 2px 0}
+  #pad button{height:42px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--text);
+    font-size:18px;font-weight:800;display:flex;align-items:center;justify-content:center}
   #pad button:active{background:#283356}
   @media(hover:hover) and (pointer:fine){ #pad{opacity:.55} }
 
@@ -1374,7 +1374,9 @@ function initPlayer(){
     let availH, availW;
     if(wide){
       availH = stage.clientHeight - 4 - logH;
-      availW = stage.clientWidth * 0.55 - sideW;   // 너비 여유를 넉넉히 → 보드가 세로를 꽉 채움
+      // 상대 영역(최대 420) + 사이드 + 간격을 뺀 나머지를 보드 너비로 (가운데 정렬, 보드 크게)
+      const oppW = Math.min(420, stage.clientWidth * 0.34);
+      availW = stage.clientWidth - oppW - sideW - 36;
     } else {
       availW = stage.clientWidth - sideW - 14;
       availH = (stage.clientHeight - 6) * 0.62 - logH;
