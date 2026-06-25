@@ -1371,17 +1371,24 @@ function initPlayer(){
     const W = grid.clientWidth, H = grid.clientHeight;
     if(n<=0 || W<=0 || H<=0) return;
     const gap=6, labelH=(oppHasTeam?30:15), ar=2;   // 이름(+팀이름표) 높이 반영
-    let best=0, bestCols=1;
-    for(let cols=1; cols<=n; cols++){
+    function boardWForCols(cols){
       const rows=Math.ceil(n/cols);
       const cw=(W - gap*(cols-1))/cols;
       const ch=(H - gap*(rows-1))/rows;
-      const bw=Math.min(cw, (ch - labelH)/ar);
+      return Math.min(cw, (ch - labelH)/ar);
+    }
+    let best=0, bestCols=1;
+    for(let cols=1; cols<=n; cols++){
+      const bw=boardWForCols(cols);
       if(bw>best){ best=bw; bestCols=cols; }
     }
+    // 옆에 빈 공간이 남으면 열을 하나 더 추가해 채우기(인원이 적으면 그대로)
+    let cols = bestCols;
+    const usedW = bestCols*best + gap*(bestCols-1);
+    if(bestCols < n && (W - usedW) >= best*0.6){ cols = bestCols + 1; best = boardWForCols(cols); }
     best = Math.max(14, Math.floor(best));            // 너무 작아지지 않게 하한
-    best = Math.min(best, Math.max(14, Math.floor(boardCS * 0.7)));  // 상대 보드는 내 보드 칸의 70% 이하(영역이 넓어져도 비율 유지)
-    grid.style.gridTemplateColumns = 'repeat('+bestCols+','+best+'px)';
+    best = Math.min(best, Math.floor(boardCS * COLS * 0.7));  // 내 보드의 약 70%까지만
+    grid.style.gridTemplateColumns = 'repeat('+cols+','+best+'px)';
     grid.style.setProperty('--bw', best+'px');
   }
 
