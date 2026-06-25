@@ -221,6 +221,7 @@ function handleMessage(ws, raw) {
           p.meta.team = t;
           if (t && !game.activeTeams.includes(t)) game.activeTeams.push(t); // 개별 지정한 팀도 활성화
           notifyTeam(p);
+          console.log('[assign] ' + p.meta.name + ' -> ' + (t || '(미배정)'));  // 로그로 확인용
         }
       }
       break;
