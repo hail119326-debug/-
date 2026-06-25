@@ -460,14 +460,14 @@ const COLS = 10, ROWS = 20;
    이 목록의 앞에서부터 그만큼 사용됩니다. 이름·색은 자유롭게 수정하세요.
    ============================================================ */
 const TEAM_PALETTE = [
-  { id:'red',    name:'레드',   color:'#fb7185' },
-  { id:'blue',   name:'블루',   color:'#60a5fa' },
-  { id:'green',  name:'그린',   color:'#34d399' },
-  { id:'gold',   name:'골드',   color:'#fbbf24' },
-  { id:'purple', name:'퍼플',   color:'#a78bfa' },
-  { id:'orange', name:'오렌지', color:'#fb923c' },
-  { id:'cyan',   name:'시안',   color:'#22d3ee' },
-  { id:'pink',   name:'핑크',   color:'#f472b6' },
+  { id:'red',    name:'레드',   color:'#ef4444' },  // 또렷한 빨강(핑크와 분리)
+  { id:'blue',   name:'블루',   color:'#3b82f6' },  // 진한 파랑
+  { id:'green',  name:'그린',   color:'#22c55e' },  // 순수 초록(시안과 분리)
+  { id:'gold',   name:'골드',   color:'#facc15' },  // 밝은 노랑(오렌지와 분리)
+  { id:'purple', name:'퍼플',   color:'#a855f7' },  // 선명한 보라
+  { id:'orange', name:'오렌지', color:'#f97316' },  // 진한 주황
+  { id:'cyan',   name:'시안',   color:'#06b6d4' },  // 청록(그린/블루와 분리)
+  { id:'pink',   name:'핑크',   color:'#ec4899' },  // 마젠타 핑크(레드와 분리)
 ];
 const TEAM_BY_ID = Object.fromEntries(TEAM_PALETTE.map(t => [t.id, t]));
 
