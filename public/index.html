@@ -1293,7 +1293,7 @@ function initPlayer(){
       if(bw>best){ best=bw; bestCols=cols; }
     }
     best = Math.max(14, Math.floor(best));            // 너무 작아지지 않게 하한
-    best = Math.min(best, Math.floor(boardCS * COLS * 0.7));  // 내 보드의 약 70%까지만
+    best = Math.min(best, Math.max(14, Math.floor(boardCS * 0.7)));  // 내 보드 칸의 70% 이하 → 상대가 내 보드보다 커지지 않음
     grid.style.gridTemplateColumns = 'repeat('+bestCols+','+best+'px)';
     grid.style.setProperty('--bw', best+'px');
   }
@@ -1370,7 +1370,7 @@ function initPlayer(){
     const sideW = side ? side.offsetWidth : 130;
     const wide = window.innerWidth >= 720;
     const lb = document.getElementById('atkLogBar');
-    const logH = (lb && lb.style.display !== 'none' && lb.children.length) ? (lb.offsetHeight || 60) + 6 : 0;
+    const logH = (lb && lb.style.display !== 'none' && lb.children.length) ? 72 : 0;  // 2줄 고정 예약(버튼 안 가림)
     let availH, availW;
     if(wide){
       availH = stage.clientHeight - 4 - logH;
