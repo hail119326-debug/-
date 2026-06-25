@@ -267,6 +267,11 @@
   .teamPicker .tpBtn.cur{border-color:#fff;box-shadow:0 0 0 2px rgba(255,255,255,.35)}
   .teamPicker .tpClose{width:100%;background:var(--panel2);color:var(--text);border:1px solid var(--line);
     border-radius:9px;padding:7px;font-weight:800;cursor:pointer}
+  /* 교사: 팀 변경 토스트 */
+  .hToast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);z-index:70;
+    background:var(--accent);color:#06121f;font-weight:900;font-size:15px;padding:10px 20px;border-radius:999px;
+    box-shadow:0 8px 24px rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s}
+  .hToast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 </style>
 </head>
 <body>
@@ -351,6 +356,7 @@
     <h1>🎮 테트리스 배틀 상황판</h1>
     <span class="pill">접속 <b id="hCount">0</b>명</span>
     <span class="pill">상태 <b id="hPhase">대기</b></span>
+    <span class="pill" id="hConn" style="font-weight:800">🔴 연결 중…</span>
     <div class="spacer"></div>
     <button class="hbtn start" id="hStart">▶ 시작</button>
     <button class="hbtn finish" id="hFinish">⏱ 게임 종료</button>
@@ -419,11 +425,16 @@ const IS_HOST = new URLSearchParams(location.search).has('host');
 const WS_URL = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host;
 let ws, myId = null;
 
+function setConn(ok){
+  const el = document.getElementById('hConn'); if(!el) return;
+  el.textContent = ok ? '🟢 연결됨' : '🔴 연결 끊김';
+  el.style.color = ok ? 'var(--good)' : 'var(--bad)';
+}
 function connect(onOpen){
   ws = new WebSocket(WS_URL);
-  ws.onopen = onOpen;
+  ws.onopen = ()=>{ setConn(true); onOpen && onOpen(); };
   ws.onmessage = (e)=>{ let m; try{m=JSON.parse(e.data)}catch{return} onServer(m); };
-  ws.onclose = ()=>{ setTimeout(()=>connect(onOpen), 1000); }; // 끊기면 재접속
+  ws.onclose = ()=>{ setConn(false); setTimeout(()=>connect(onOpen), 1000); }; // 끊기면 재접속
 }
 function send(obj){ if(ws && ws.readyState===1) ws.send(JSON.stringify(obj)); }
 
@@ -618,6 +629,33 @@ function initHost(){
   }
   document.getElementById('hSetKw').onclick = setKw;
   document.getElementById('hClearKw').onclick = ()=>{ kwInput.value=''; send({type:'setkeyword', words:[]}); };
+  // 카드에 팀 색 입히기(렌더와 즉시반영에서 공용)
+  function styleCard(el, ptEl, team){
+    const ti = TEAM_BY_ID[team];
+    if(ti){
+      el.style.borderColor = ti.color;
+      el.style.background  = 'color-mix(in srgb,'+ti.color+' 16%, var(--panel))';
+      el.style.boxShadow   = '0 0 0 2px '+ti.color+', 0 6px 18px color-mix(in srgb,'+ti.color+' 35%, transparent)';
+      ptEl.textContent = ti.name + ' 팀';
+      ptEl.style.background = ti.color; ptEl.style.color = '#0b0e1a';
+    } else {
+      el.style.borderColor=''; el.style.background=''; el.style.boxShadow='';
+      ptEl.textContent = '미배정'; ptEl.style.background=''; ptEl.style.color='';
+    }
+  }
+  function assignTeam(id, team){
+    send({type:'assign', id, team});                 // 서버로 전송
+    const c = cards.get(id);                          // 화면에서 즉시 색 바꾸기(반응 확인용)
+    if(c){ c.el.dataset.team = team; styleCard(c.el, c.pt, team); }
+    const ti = TEAM_BY_ID[team];
+    hostToast((nameById[id]||'학생') + ' → ' + (ti ? ti.name+'팀' : '미배정'));
+  }
+  function hostToast(text){
+    let t = document.getElementById('hToast');
+    if(!t){ t = document.createElement('div'); t.id='hToast'; t.className='hToast'; document.body.appendChild(t); }
+    t.textContent = text; t.classList.add('show');
+    clearTimeout(t._tm); t._tm = setTimeout(()=>t.classList.remove('show'), 1400);
+  }
   // 학생 카드 클릭 → 팀 선택 메뉴 (원하는 팀 직접 지정)
   function closeTeamPicker(){
     document.getElementById('teamPicker').classList.add('hidden');
@@ -631,12 +669,12 @@ function initHost(){
       const ti=TEAM_BY_ID[tid]; if(!ti) return;
       const b=document.createElement('button');
       b.className='tpBtn'+(tid===cur?' cur':''); b.textContent=ti.name; b.style.background=ti.color;
-      b.onclick=()=>{ send({type:'assign', id, team:tid}); closeTeamPicker(); };
+      b.onclick=()=>{ assignTeam(id, tid); closeTeamPicker(); };
       row.appendChild(b);
     });
     const nb=document.createElement('button');
     nb.className='tpBtn none'+(cur===''?' cur':''); nb.textContent='미배정';
-    nb.onclick=()=>{ send({type:'assign', id, team:''}); closeTeamPicker(); };
+    nb.onclick=()=>{ assignTeam(id, ''); closeTeamPicker(); };
     row.appendChild(nb);
     let bd=document.getElementById('tpBackdrop');
     if(!bd){ bd=document.createElement('div'); bd.id='tpBackdrop'; bd.className='tpBackdrop'; bd.onclick=closeTeamPicker; document.body.appendChild(bd); }
@@ -759,18 +797,7 @@ function initHost(){
       }
       c.el.className = 'pcard' + (p.alive?'':' dead');
       c.el.dataset.team = p.team || '';
-      const ti = TEAM_BY_ID[p.team];
-      if(ti){
-        c.el.style.borderColor = ti.color;                                              // 테두리 전체 팀 색
-        c.el.style.background  = 'color-mix(in srgb,'+ti.color+' 16%, var(--panel))';    // 옅은 팀 색 배경
-        c.el.style.boxShadow   = '0 0 0 2px '+ti.color+', 0 6px 18px color-mix(in srgb,'+ti.color+' 35%, transparent)';
-        c.pt.textContent = ti.name + ' 팀';
-        c.pt.style.background = ti.color; c.pt.style.color = '#0b0e1a';                  // 팀 색으로 채운 칩
-      } else {
-        c.el.style.borderColor=''; c.el.style.background=''; c.el.style.boxShadow='';
-        c.pt.textContent = '미배정';
-        c.pt.style.background=''; c.pt.style.color='';
-      }
+      styleCard(c.el, c.pt, p.team || '');
       c.pn.textContent = p.name;
       c.ps.textContent = p.score + '점 · ' + p.lines + '줄';
       renderBoard(c.canvas, p.board);
