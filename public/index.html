@@ -179,6 +179,11 @@
   .tcard .tbarfill{height:8px;background:var(--panel2);border-radius:999px;margin-top:8px;overflow:hidden}
   .tcard .tbarfill > span{display:block;height:100%;background:var(--tc);border-radius:999px;transition:width .3s}
   .teamCtl{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .hbtn.settings{background:var(--panel2);color:var(--text);border:1px solid var(--line)}
+  .hbtn.settings.on{background:linear-gradient(90deg,var(--accent2),var(--accent));color:#06121f;border-color:transparent}
+  /* ⚙️ 설정 패널 (접기/펼치기) */
+  .hSettings{display:flex;flex-direction:column;gap:10px;background:var(--panel);border:1px solid var(--line);
+    border-radius:14px;padding:12px;margin-top:4px}
   .teamCtl select{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:3px 8px;font-size:15px;font-weight:800;margin-left:6px}
   .teamCtl textarea{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:14px;font-weight:700;width:170px;resize:vertical;font-family:inherit}
   .teamCtl textarea:focus{outline:none;border-color:var(--accent)}
@@ -362,32 +367,36 @@
     <button class="hbtn finish" id="hFinish">⏱ 게임 종료</button>
     <button class="hbtn reset" id="hReset">🔄 리셋</button>
     <button class="hbtn assign hidden" id="hShowResult">📊 결과 보기</button>
+    <button class="hbtn settings" id="hSettingsBtn">⚙️ 설정</button>
   </div>
-  <div class="teamCtl">
-    <span class="pill">팀 수
-      <select id="hTeamCount">
-        <option>2</option><option>3</option><option>4</option><option>5</option>
-        <option>6</option><option>7</option><option>8</option>
-      </select>
-    </span>
-    <button class="hbtn assign" id="hAssign">🎲 팀 자동 배정</button>
-    <button class="hbtn reset" id="hClear">팀 해제</button>
-    <span class="pill" style="color:var(--muted)">👆 학생 카드를 누르면 원하는 팀을 직접 고를 수 있어요</span>
-  </div>
-  <!-- 학생 카드 클릭 시 뜨는 팀 선택 메뉴 -->
+  <!-- 팀 선택 팝업 (항상 동작해야 하므로 설정 패널 바깥) -->
   <div id="teamPicker" class="teamPicker hidden">
     <div class="tpTitle" id="tpTitle">팀 선택</div>
     <div class="tpRow" id="tpRow"></div>
     <button class="tpClose" id="tpClose">닫기</button>
   </div>
-  <div class="teamCtl">
-    <span class="pill">📚 학습 키워드 <span style="color:var(--muted);font-weight:700">(한 줄에 하나, 최대 20개)</span></span>
-    <textarea id="hKeyword" rows="3" placeholder="광합성&#10;엽록체&#10;기공"></textarea>
-    <div style="display:flex;flex-direction:column;gap:6px">
-      <button class="hbtn assign" id="hSetKw">키워드 등록</button>
-      <button class="hbtn reset" id="hClearKw">키워드 지우기</button>
+  <!-- ⚙️ 설정 패널 (기본은 접힘, 설정 버튼으로 펼침) -->
+  <div id="hSettings" class="hSettings hidden">
+    <div class="teamCtl">
+      <span class="pill">팀 수
+        <select id="hTeamCount">
+          <option>2</option><option>3</option><option>4</option><option>5</option>
+          <option>6</option><option>7</option><option>8</option>
+        </select>
+      </span>
+      <button class="hbtn assign" id="hAssign">🎲 팀 자동 배정</button>
+      <button class="hbtn reset" id="hClear">팀 해제</button>
+      <span class="pill" style="color:var(--muted)">👆 학생 카드를 누르면 원하는 팀을 직접 고를 수 있어요</span>
     </div>
-    <span class="pill" id="kwNow" style="color:var(--muted)">등록된 키워드 없음</span>
+    <div class="teamCtl">
+      <span class="pill">📚 학습 키워드 <span style="color:var(--muted);font-weight:700">(한 줄에 하나, 최대 20개)</span></span>
+      <textarea id="hKeyword" rows="3" placeholder="광합성&#10;엽록체&#10;기공"></textarea>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <button class="hbtn assign" id="hSetKw">키워드 등록</button>
+        <button class="hbtn reset" id="hClearKw">키워드 지우기</button>
+      </div>
+      <span class="pill" id="kwNow" style="color:var(--muted)">등록된 키워드 없음</span>
+    </div>
   </div>
   <div class="joinUrls" id="joinUrls"><span class="pill">학생 접속 주소 불러오는 중…</span></div>
   <div id="teamBar"></div>
@@ -615,6 +624,13 @@ function initHost(){
 
   /* ---- 팀 컨트롤 (교사 권한) ---- */
   const teamSel = document.getElementById('hTeamCount');
+  // ⚙️ 설정 패널 열기/닫기
+  document.getElementById('hSettingsBtn').onclick = ()=>{
+    const panel = document.getElementById('hSettings');
+    const btn = document.getElementById('hSettingsBtn');
+    const open = panel.classList.toggle('hidden') === false;
+    btn.classList.toggle('on', open);
+  };
   let teamCount = parseInt(teamSel.value,10) || 2;
   teamSel.onchange = ()=>{ teamCount = parseInt(teamSel.value,10) || 2; };
   const activeTeamIds = ()=> TEAM_PALETTE.slice(0, teamCount).map(t=>t.id);
