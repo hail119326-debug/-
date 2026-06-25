@@ -471,6 +471,50 @@ const TEAM_PALETTE = [
 ];
 const TEAM_BY_ID = Object.fromEntries(TEAM_PALETTE.map(t => [t.id, t]));
 
+/* ============== 효과음 (Web Audio, 파일 없음) ============== */
+let _actx=null;
+function _ac(){ if(!_actx){ try{ _actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return null; } } if(_actx && _actx.state==='suspended') _actx.resume(); return _actx; }
+function _tone(freq,dur,type,vol,delay,glideTo){
+  const c=_ac(); if(!c) return; const t0=c.currentTime+(delay||0);
+  const osc=c.createOscillator(), g=c.createGain();
+  osc.type=type||'square'; osc.frequency.setValueAtTime(freq,t0);
+  if(glideTo) osc.frequency.exponentialRampToValueAtTime(glideTo,t0+dur);
+  g.gain.setValueAtTime(0.0001,t0);
+  g.gain.exponentialRampToValueAtTime(vol||0.2,t0+0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
+  osc.connect(g); g.connect(c.destination); osc.start(t0); osc.stop(t0+dur+0.02);
+}
+function _noise(dur,vol,delay){
+  const c=_ac(); if(!c) return; const t0=c.currentTime+(delay||0);
+  const buf=c.createBuffer(1,Math.max(1,Math.floor(c.sampleRate*dur)),c.sampleRate); const d=buf.getChannelData(0);
+  for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*(1-i/d.length);
+  const src=c.createBufferSource(); src.buffer=buf;
+  const g=c.createGain(); g.gain.setValueAtTime(vol||0.2,t0); g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
+  const f=c.createBiquadFilter(); f.type='lowpass'; f.frequency.value=1800;
+  src.connect(f); f.connect(g); g.connect(c.destination); src.start(t0); src.stop(t0+dur);
+}
+let SFX_ON=true;
+const SFX={
+  move:    ()=> _tone(330,0.05,'square',0.162),                                                  // 이동(10%↓)
+  rotate:  ()=> _tone(520,0.06,'square',0.162,0,660),                                            // 회전(10%↓)
+  lock:    ()=> { _tone(140,0.08,'triangle',0.28); _noise(0.05,0.12); },                         // 착지 A
+  clear:   ()=> { _tone(523,0.1,'square',0.2,0); _tone(659,0.1,'square',0.2,0.06); _tone(784,0.14,'square',0.2,0.12); }, // 줄삭제 A
+  tetris:  ()=> { [523,659,784,1047].forEach((f,i)=> _tone(f,0.16,'square',0.22,i*0.07)); },     // 테트리스 A
+  combo1:  ()=> _tone(523,0.12,'square',0.22),
+  combo2:  ()=> { _tone(523,0.1,'square',0.2); _tone(659,0.12,'square',0.22,0.08); },
+  combo3:  ()=> { _tone(523,0.09,'square',0.2); _tone(659,0.09,'square',0.2,0.07); _tone(880,0.14,'square',0.24,0.14); },
+  atk_send:()=> _tone(1300,0.26,'sawtooth',0.20,0,200),                                          // 공격 보냄 B(레이저)
+  atk_hit: ()=> { _tone(170,0.10,'sawtooth',0.24,0); _tone(150,0.14,'sawtooth',0.24,0.12); },    // 공격 받음 D(경고)
+  count:   ()=> _tone(440,0.12,'square',0.25),                                                   // 카운트 삐
+  go:      ()=> { _tone(523,0.12,'square',0.26,0); _tone(784,0.2,'square',0.28,0.1); },          // 시작
+  over:    ()=> { [440,392,330,262].forEach((f,i)=> _tone(f,0.2,'triangle',0.26,i*0.13)); },     // 게임오버 B
+  win:     ()=> { const seq=[[523,0.15],[659,0.15],[784,0.15],[1047,0.3],[988,0.15],[1047,0.5]]; let t=0; seq.forEach(([f,d])=>{ _tone(f,d,'square',0.22,t); t+=d*0.85; }); }, // 우승 C
+};
+function sfx(n){ if(!SFX_ON) return; const f=SFX[n]; if(f){ try{ f(); }catch(e){} } }
+// 첫 사용자 입력(터치/클릭/키)에서 오디오 잠금 해제
+['pointerdown','keydown','touchstart'].forEach(ev=> window.addEventListener(ev, ()=>_ac()));
+
+
 function drawCell(ctx, x, y, cell, cs){
   if(!cell) return;
   ctx.fillStyle = COLOR[cell];
@@ -910,8 +954,8 @@ function initPlayer(){
     if(m.type==='start'){ startCountdown(); return; }
     if(m.type==='reset'){ hideBigCount(); toWaiting(); return; }
     if(m.type==='team'){ setMyTeam(m.team); return; }
-    if(m.type==='garbage'){ if(G && state==='playing'){ addGarbage(m.amount); showAtkToast('🛡️ '+esc(m.from||'상대')+' 공격! +'+m.amount+'줄', 'hit'); } addMyLog('🛡️ '+esc(m.from||'상대')+' → 나 '+m.amount+'줄','hit'); return; }
-    if(m.type==='attacked'){ showAtkToast('⚔️ '+esc(m.to||'상대')+'에게 +'+m.amount+'줄!', 'send'); addMyLog('⚔️ 나 → '+esc(m.to||'상대')+' '+m.amount+'줄','send'); return; }
+    if(m.type==='garbage'){ if(G && state==='playing'){ addGarbage(m.amount); showAtkToast('🛡️ '+esc(m.from||'상대')+' 공격! +'+m.amount+'줄', 'hit'); sfx('atk_hit'); } addMyLog('🛡️ '+esc(m.from||'상대')+' → 나 '+m.amount+'줄','hit'); return; }
+    if(m.type==='attacked'){ showAtkToast('⚔️ '+esc(m.to||'상대')+'에게 +'+m.amount+'줄!', 'send'); sfx('atk_send'); addMyLog('⚔️ 나 → '+esc(m.to||'상대')+' '+m.amount+'줄','send'); return; }
     if(m.type==='gameover'){ hideBigCount(); onGameOver(m); return; }
     if(m.type==='endcountdown'){ runBigCount(m.sec||5, true); return; }
     if(m.type==='world'){ onWorld(m); return; }
@@ -1046,11 +1090,11 @@ function initPlayer(){
     if(state==='playing') return;
     hideResultUI();
     let n=3;
-    setOverlay('', String(n), '');
+    setOverlay('', String(n), ''); sfx('count');
     const iv = setInterval(()=>{
       n--;
-      if(n>0) setOverlay('', String(n), '');
-      else if(n===0) setOverlay('', 'GO!', '');
+      if(n>0){ setOverlay('', String(n), ''); sfx('count'); }
+      else if(n===0){ setOverlay('', 'GO!', ''); sfx('go'); }
       else { clearInterval(iv); hideOverlay(); beginGame(); }
     }, 700);
   }
@@ -1118,7 +1162,7 @@ function initPlayer(){
     const p=g.cur, old=p.mat, oldLc=p.lc, n=p.mat.length;
     p.mat = rotateCW(p.mat);
     if(p.lc) p.lc = { x:n-1-p.lc.y, y:p.lc.x, ch:p.lc.ch };   // 글자 칸도 같이 회전
-    for(const dx of [0,-1,1,-2,2]){ p.c+=dx; if(!collide(g,p)) return; p.c-=dx; }
+    for(const dx of [0,-1,1,-2,2]){ p.c+=dx; if(!collide(g,p)){ sfx('rotate'); return; } p.c-=dx; }
     p.mat = old; p.lc = oldLc; // 실패 시 원복
   }
   function lock(g){
@@ -1128,6 +1172,7 @@ function initPlayer(){
         if(p.lc && p.lc.x===x && p.lc.y===y) g.letters[gy][gx]=p.lc.ch; } }
     }
     g.down=false;          // 조각이 놓이면 소프트 드롭 해제 → 다음 조각은 정상 속도
+    sfx('lock');
     clearLines(g);
     spawn(g);
   }
@@ -1153,9 +1198,9 @@ function initPlayer(){
       g.atkSent += atk;                          // 통계: 보낸 공격줄 누적
       if(g.combo > g.maxCombo) g.maxCombo = g.combo;  // 통계: 최대 콤보
       // 화면 연출
-      if(cleared===4) showLineFx('TETRIS! +'+(base+comboBonus), 'tetris');
-      else if(g.combo>0) showLineFx(g.combo+' COMBO! +'+(base+comboBonus), 'combo');
-      else if(cleared>=2) showLineFx('+'+base, 'line');
+      if(cleared===4){ showLineFx('TETRIS! +'+(base+comboBonus), 'tetris'); sfx('tetris'); }
+      else if(g.combo>=1){ if(g.combo>0) showLineFx(g.combo+' COMBO! +'+(base+comboBonus), 'combo'); else if(cleared>=2) showLineFx('+'+base, 'line'); sfx(g.combo>=3?'combo3':g.combo>=2?'combo2':'combo1'); }
+      else { if(cleared>=2) showLineFx('+'+base, 'line'); sfx('clear'); }
     } else {
       g.combo=-1;                              // 줄 못 지움 → 콤보 끊김
     }
@@ -1181,7 +1226,7 @@ function initPlayer(){
     if(!collide(g,{...g.cur,r:g.cur.r+1})){ g.cur.r++; if(g.down) g.score+=1; }
     else lock(g);
   }
-  function move(g,dx){ g.cur.c+=dx; if(collide(g,g.cur)) g.cur.c-=dx; }
+  function move(g,dx){ g.cur.c+=dx; if(collide(g,g.cur)) g.cur.c-=dx; else sfx('move'); }
 
   /* ============== 루프 / 렌더 ============== */
   function beginGame(){
@@ -1281,7 +1326,7 @@ function initPlayer(){
 
   function endGame(){
     if(state!=='playing') return;
-    state='dead'; cancelAnimationFrame(raf); stopSoft();
+    state='dead'; cancelAnimationFrame(raf); stopSoft(); sfx('over');
     sendState(); send({type:'topout', score:G.score, lines:G.lines, atk:G.atkSent, combo:G.maxCombo, wbonus:G.wordBonus, cbonus:G.comboBonusTotal});
     updateStats();
     const rankTxt = myRank ? ('현재 '+myRank+' / '+myTotal+'위') : '';
@@ -1299,6 +1344,7 @@ function initPlayer(){
     if(m.teamMode){ const ws=(m.winnerTeams&&m.winnerTeams.length)?m.winnerTeams:(m.winnerTeam?[m.winnerTeam]:[]); iWon = me && ws.includes(me.team); }
     else { const ns=(m.winnerNames&&m.winnerNames.length)?m.winnerNames:[]; iWon = me && ns.includes(me.name); }
     setOverlay(iWon ? ('🏆 '+wi.text) : wi.text, '', me ? ('내 순위 '+pos+'위 · '+me.score+'점') : '');
+    if(iWon) sfx('win');
     openFinal();
     document.getElementById('showResultBtn').classList.remove('hidden');  // 결과 다시 보기 버튼
   }
