@@ -260,8 +260,8 @@
   .pcard{cursor:pointer}
   .pcard .pt{font-size:11px;font-weight:800;padding:2px 10px;border-radius:999px;background:var(--panel2);color:var(--muted)}
   /* 학생 카드 클릭 → 팀 선택 메뉴 */
-  .tpBackdrop{position:fixed;inset:0;z-index:59}
-  .teamPicker{position:fixed;z-index:60;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+  .tpBackdrop{position:fixed;inset:0;z-index:9998}
+  .teamPicker{position:fixed;z-index:9999;background:var(--panel);border:1px solid var(--line);border-radius:14px;
     padding:12px;box-shadow:0 14px 40px rgba(0,0,0,.55);min-width:190px;max-width:240px}
   .teamPicker .tpTitle{font-size:12px;color:var(--muted);font-weight:800;margin-bottom:8px;
     max-width:216px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -679,6 +679,7 @@ function initHost(){
   }
   function openTeamPicker(e, id, cur){
     const tp=document.getElementById('teamPicker'), row=document.getElementById('tpRow');
+    if(tp.parentElement !== document.body) document.body.appendChild(tp);   // 맨 위층으로 빼내기(클릭 가로채임 방지)
     document.getElementById('tpTitle').textContent = (nameById[id]||'학생') + ' → 팀 선택';
     row.innerHTML='';
     activeTeamIds().forEach(tid=>{
