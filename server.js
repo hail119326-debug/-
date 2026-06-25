@@ -216,7 +216,12 @@ function handleMessage(ws, raw) {
     case 'assign':           // 교사: 특정 학생을 특정 팀으로
       if (ws.meta.role === 'host') {
         const p = players().find(x => x.meta.id === (m.id | 0));
-        if (p) { p.meta.team = (m.team || '').toString().slice(0, 16); notifyTeam(p); }
+        if (p) {
+          const t = (m.team || '').toString().slice(0, 16);
+          p.meta.team = t;
+          if (t && !game.activeTeams.includes(t)) game.activeTeams.push(t); // 개별 지정한 팀도 활성화
+          notifyTeam(p);
+        }
       }
       break;
     case 'clearteams':       // 교사: 팀 해제 → 개인전
