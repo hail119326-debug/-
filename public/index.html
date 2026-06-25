@@ -1380,7 +1380,7 @@ function initPlayer(){
       if(bw>best){ best=bw; bestCols=cols; }
     }
     best = Math.max(14, Math.floor(best));            // 너무 작아지지 않게 하한
-    best = Math.min(best, Math.floor(boardCS * COLS * 0.7));  // 내 보드의 약 70%까지만
+    best = Math.min(best, Math.max(14, Math.floor(boardCS * 0.7)));  // 상대 보드는 내 보드 칸의 70% 이하(영역이 넓어져도 비율 유지)
     grid.style.gridTemplateColumns = 'repeat('+bestCols+','+best+'px)';
     grid.style.setProperty('--bw', best+'px');
   }
