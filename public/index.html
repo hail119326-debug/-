@@ -795,9 +795,9 @@ function initHost(){
       return;
     } else { const e=grid.querySelector('.empty'); if(e) e.remove(); }
 
-    // 팀별로 묶어서(팔레트 순) → 팀 안에서는 점수순으로 배치
+    // 개인전: 접속 순서 고정 / 팀전: 팀별로 묶고 팀 안에서는 접속 순서 고정 (점수로 자리 안 바뀜)
     const order = m.players.slice().sort((a,b)=>
-      (teamRank(a.team)-teamRank(b.team)) || (b.alive-a.alive) || (b.score-a.score));
+      (teamRank(a.team)-teamRank(b.team)) || (a.id - b.id));
 
     order.forEach(p=>{
       nameById[p.id] = p.name;
@@ -1328,7 +1328,10 @@ function initPlayer(){
     myRank = meIdx>=0 ? meIdx+1 : 0; myTotal = m.players.length;
     document.getElementById('meRank').textContent = meIdx>=0 ? ((meIdx+1)+' / '+m.players.length+'위') : '';
 
-    const others = m.players.filter(p=>p.id!==myId);
+    // 개인전: 접속 순서 고정 / 팀전: 팀끼리 묶고 팀 안에서 접속 순서 (점수로 자리 안 바뀜)
+    const oppTeamRank = t => { const i = TEAM_PALETTE.findIndex(x=>x.id===t); return i<0 ? 99 : i; };
+    const others = m.players.filter(p=>p.id!==myId).sort((a,b)=>
+      (oppTeamRank(a.team)-oppTeamRank(b.team)) || (a.id - b.id));
     document.getElementById('oppCount').textContent = '('+others.length+')';
     const grid = document.getElementById('oppGrid');
     const ids = new Set(others.map(p=>p.id));
