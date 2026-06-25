@@ -36,12 +36,12 @@
   .topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:4px 8px}
   .topbar .me{font-weight:800;font-size:16px}
   .topbar .rank{color:var(--accent);font-weight:800}
-  .stage{flex:1;display:flex;gap:10px;min-height:0}
+  .stage{flex:1;display:flex;gap:10px;min-height:0;justify-content:center}
   .mainCol{display:flex;gap:10px;min-height:0;flex:0 0 auto;justify-content:center;order:2}   /* 내 보드: 오른쪽 */
   .boardWrap{position:relative;display:flex;align-items:center}
   #board{background:#070a14;border:1px solid var(--line);border-radius:10px;height:100%;max-height:100%;touch-action:none}
   .side{display:flex;flex-direction:column;gap:10px;width:140px;min-width:120px}
-  .oppWrap{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;order:1;             /* 상대 화면: 왼쪽 */
+  .oppWrap{flex:0 1 auto;min-width:0;max-width:48vw;min-height:0;display:flex;flex-direction:column;order:1;   /* 상대 화면: 왼쪽(내용만큼만, 빈공간 최소화) */
     background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px}
   .oppTitle{margin:0 0 6px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
   #oppGrid{flex:1;overflow:auto;display:grid;gap:6px;align-content:start;justify-content:center}   /* 칸 크기는 JS가 인원수에 맞춰 계산 */
@@ -89,9 +89,9 @@
   .finalCard h2{margin:0;font-size:clamp(24px,5vw,38px)}
   .finalMe{font-size:18px;font-weight:800;color:var(--accent)}
   @media (max-width:720px){
-    .stage{flex-direction:column}
+    .stage{flex-direction:column;justify-content:flex-start}
     .mainCol{order:1}     /* 모바일에선 내 보드를 위로 */
-    .oppWrap{order:2;flex:1 1 auto;max-height:38vh}
+    .oppWrap{order:2;flex:1 1 auto;max-width:none;max-height:38vh}
     .side{width:120px;min-width:108px}
   }
   .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px}
