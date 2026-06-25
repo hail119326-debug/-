@@ -1367,16 +1367,17 @@ function initPlayer(){
   function fit(){
     const stage = board.closest('.stage'); if(!stage) return;
     const side = document.querySelector('.side');
-    const sideW = side ? side.offsetWidth : 130;
     const wide = window.innerWidth >= 720;
+    let sideW = side ? side.offsetWidth : 0;
+    if(!sideW) sideW = wide ? 150 : 130;        // 점수판 폭을 못 읽으면 안전값 사용(보드가 점수판 위로 넘어가는 것 방지)
     const lb = document.getElementById('atkLogBar');
     const logH = (lb && lb.style.display !== 'none' && lb.children.length) ? (lb.offsetHeight || 60) + 6 : 0;
     let availH, availW;
     if(wide){
       availH = stage.clientHeight - 4 - logH;
-      availW = stage.clientWidth * 0.55 - sideW;   // 너비 여유를 넉넉히 → 보드가 세로를 꽉 채움
+      availW = (stage.clientWidth - sideW) * 0.62 - 16;   // 점수판 폭 뺀 나머지에서 보드 너비
     } else {
-      availW = stage.clientWidth - sideW - 14;
+      availW = stage.clientWidth - sideW - 22;            // 점수판 폭 + 여유를 넉넉히 빼서 겹침 방지
       availH = (stage.clientHeight - 6) * 0.62 - logH;
     }
     if(availH <= 0 || availW <= 0) return;
@@ -1390,6 +1391,7 @@ function initPlayer(){
   }
   window.addEventListener('resize', ()=>{ fit(); });
   setTimeout(fit, 50);
+  requestAnimationFrame(()=>requestAnimationFrame(fit));   // 화면이 다 그려진 뒤 한 번 더(점수판 폭 0 방지)
 
   connect(()=>{ if(state!=='name'){ send({type:'join', role:'player', name:myName, team:myTeam}); } });
   setTimeout(()=>nameInput.focus(), 100);
