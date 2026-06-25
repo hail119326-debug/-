@@ -36,12 +36,12 @@
   .topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:4px 8px}
   .topbar .me{font-weight:800;font-size:16px}
   .topbar .rank{color:var(--accent);font-weight:800}
-  .stage{flex:1;display:flex;gap:10px;min-height:0;justify-content:center}
+  .stage{flex:1;display:flex;gap:10px;min-height:0}
   .mainCol{display:flex;gap:10px;min-height:0;flex:0 0 auto;justify-content:center;order:2}   /* 내 보드: 오른쪽 */
   .boardWrap{position:relative;display:flex;align-items:center}
   #board{background:#070a14;border:1px solid var(--line);border-radius:10px;height:100%;max-height:100%;touch-action:none}
   .side{display:flex;flex-direction:column;gap:10px;width:140px;min-width:120px}
-  .oppWrap{flex:0 1 auto;min-width:0;max-width:48vw;min-height:0;display:flex;flex-direction:column;order:1;   /* 상대 화면: 왼쪽(내용만큼만, 빈공간 최소화) */
+  .oppWrap{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;order:1;             /* 상대 화면: 왼쪽 */
     background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px}
   .oppTitle{margin:0 0 6px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
   #oppGrid{flex:1;overflow:auto;display:grid;gap:6px;align-content:start;justify-content:center}   /* 칸 크기는 JS가 인원수에 맞춰 계산 */
@@ -89,9 +89,9 @@
   .finalCard h2{margin:0;font-size:clamp(24px,5vw,38px)}
   .finalMe{font-size:18px;font-weight:800;color:var(--accent)}
   @media (max-width:720px){
-    .stage{flex-direction:column;justify-content:flex-start}
+    .stage{flex-direction:column}
     .mainCol{order:1}     /* 모바일에선 내 보드를 위로 */
-    .oppWrap{order:2;flex:1 1 auto;max-width:none;max-height:38vh}
+    .oppWrap{order:2;flex:1 1 auto;max-height:38vh}
     .side{width:120px;min-width:108px}
   }
   .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px}
@@ -254,6 +254,19 @@
   .hbtn.assign{background:linear-gradient(90deg,var(--accent2),var(--accent))}
   .pcard{cursor:pointer}
   .pcard .pt{font-size:11px;font-weight:800;padding:2px 10px;border-radius:999px;background:var(--panel2);color:var(--muted)}
+  /* 학생 카드 클릭 → 팀 선택 메뉴 */
+  .tpBackdrop{position:fixed;inset:0;z-index:59}
+  .teamPicker{position:fixed;z-index:60;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:12px;box-shadow:0 14px 40px rgba(0,0,0,.55);min-width:190px;max-width:240px}
+  .teamPicker .tpTitle{font-size:12px;color:var(--muted);font-weight:800;margin-bottom:8px;
+    max-width:216px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .teamPicker .tpRow{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+  .teamPicker .tpBtn{border:2px solid transparent;border-radius:999px;padding:7px 13px;font-weight:800;font-size:13px;
+    cursor:pointer;color:#0b0e1a;line-height:1}
+  .teamPicker .tpBtn.none{background:var(--panel2);color:var(--text);border-color:var(--line)}
+  .teamPicker .tpBtn.cur{border-color:#fff;box-shadow:0 0 0 2px rgba(255,255,255,.35)}
+  .teamPicker .tpClose{width:100%;background:var(--panel2);color:var(--text);border:1px solid var(--line);
+    border-radius:9px;padding:7px;font-weight:800;cursor:pointer}
 </style>
 </head>
 <body>
@@ -353,7 +366,13 @@
     </span>
     <button class="hbtn assign" id="hAssign">🎲 팀 자동 배정</button>
     <button class="hbtn reset" id="hClear">팀 해제</button>
-    <span class="pill" style="color:var(--muted)">학생 카드를 누르면 팀이 바뀌어요</span>
+    <span class="pill" style="color:var(--muted)">👆 학생 카드를 누르면 원하는 팀을 직접 고를 수 있어요</span>
+  </div>
+  <!-- 학생 카드 클릭 시 뜨는 팀 선택 메뉴 -->
+  <div id="teamPicker" class="teamPicker hidden">
+    <div class="tpTitle" id="tpTitle">팀 선택</div>
+    <div class="tpRow" id="tpRow"></div>
+    <button class="tpClose" id="tpClose">닫기</button>
   </div>
   <div class="teamCtl">
     <span class="pill">📚 학습 키워드 <span style="color:var(--muted);font-weight:700">(한 줄에 하나, 최대 20개)</span></span>
@@ -599,10 +618,35 @@ function initHost(){
   }
   document.getElementById('hSetKw').onclick = setKw;
   document.getElementById('hClearKw').onclick = ()=>{ kwInput.value=''; send({type:'setkeyword', words:[]}); };
-  function cycleTeam(id, cur){
-    const a = activeTeamIds(); const i = a.indexOf(cur);
-    send({type:'assign', id, team: a[(i+1) % a.length]});  // 다음 팀으로 변경(미배정이면 첫 팀)
+  // 학생 카드 클릭 → 팀 선택 메뉴 (원하는 팀 직접 지정)
+  function closeTeamPicker(){
+    document.getElementById('teamPicker').classList.add('hidden');
+    const bd=document.getElementById('tpBackdrop'); if(bd) bd.style.display='none';
   }
+  function openTeamPicker(e, id, cur){
+    const tp=document.getElementById('teamPicker'), row=document.getElementById('tpRow');
+    document.getElementById('tpTitle').textContent = (nameById[id]||'학생') + ' → 팀 선택';
+    row.innerHTML='';
+    activeTeamIds().forEach(tid=>{
+      const ti=TEAM_BY_ID[tid]; if(!ti) return;
+      const b=document.createElement('button');
+      b.className='tpBtn'+(tid===cur?' cur':''); b.textContent=ti.name; b.style.background=ti.color;
+      b.onclick=()=>{ send({type:'assign', id, team:tid}); closeTeamPicker(); };
+      row.appendChild(b);
+    });
+    const nb=document.createElement('button');
+    nb.className='tpBtn none'+(cur===''?' cur':''); nb.textContent='미배정';
+    nb.onclick=()=>{ send({type:'assign', id, team:''}); closeTeamPicker(); };
+    row.appendChild(nb);
+    let bd=document.getElementById('tpBackdrop');
+    if(!bd){ bd=document.createElement('div'); bd.id='tpBackdrop'; bd.className='tpBackdrop'; bd.onclick=closeTeamPicker; document.body.appendChild(bd); }
+    bd.style.display='block';
+    tp.classList.remove('hidden');
+    const px=Math.min((e&&e.clientX)||120, window.innerWidth-210);
+    const py=Math.min((e&&e.clientY)||120, window.innerHeight-190);
+    tp.style.left=Math.max(8,px)+'px'; tp.style.top=Math.max(8,py)+'px';
+  }
+  document.getElementById('tpClose').onclick=closeTeamPicker;
   const teamRank = (t)=>{ const i = activeTeamIds().indexOf(t); return i<0 ? 99 : i; }; // 그리드 묶음 순서
 
   window.onServer = (m)=>{
@@ -710,7 +754,7 @@ function initHost(){
         const pt = document.createElement('div'); pt.className='pt';
         const ps = document.createElement('div'); ps.className='ps';
         el.append(cv,pn,pt,ps); grid.appendChild(el);
-        el.onclick = ()=> cycleTeam(+el.dataset.pid, el.dataset.team || ''); // 클릭으로 팀 변경
+        el.onclick = (e)=> openTeamPicker(e, +el.dataset.pid, el.dataset.team || ''); // 클릭 → 팀 선택 메뉴
         c = {el, canvas:cv, pn, pt, ps}; cards.set(p.id, c);
       }
       c.el.className = 'pcard' + (p.alive?'':' dead');
